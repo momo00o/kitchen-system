@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>نظام توريد المطبخ المركزي - المتكامل</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;900&display=swap');
+        body { font-family: 'Tajawal', sans-serif; background-color: #f8fafc; }
+        .hidden-view { display: none !important; }
+        .spinner { border: 3px solid #f3f3f3; border-top: 3px solid #3498db; border-radius: 50%; width: 20px; height: 20px; animation: spin 1s linear infinite; display: inline-block; vertical-align: middle; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        
+        @media print {
+            body * { visibility: hidden; }
+            #printModal, #printModal * { visibility: visible; }
+            #printModal { position: absolute; left: 0; top: 0; width: 100%; box-shadow: none; border: none; }
+            .no-print { display: none !important; }
+        }
+    </style>
+</head>
+<body class="text-gray-800 h-screen flex flex-col items-center p-4 overflow-y-auto">
+
+    <div id="topBar" class="w-full max-w-7xl flex flex-col md:flex-row justify-between items-center mb-6 hidden-view bg-white p-4 rounded-xl shadow-sm border border-gray-200">
+        <h2 class="text-xl font-bold text-gray-700">مرحباً، <span id="currentUserDisplay" class="text-blue-600"></span></h2>
+        <div id="userNav" class="flex gap-2 mt-4 md:mt-0 hidden-view">
+            <button onclick="switchUserTab('newOrder')" id="tabNewOrder" class="px-4 py-2 font-bold bg-blue-600 text-white rounded-lg">طلب جديد</button>
+            <button onclick="switchUserTab('myOrders')" id="tabMyOrders" class="px-4 py-2 font-bold bg-gray-200 text-gray-700 rounded-lg">طلباتي السابقة</button>
+        </div>
+        <div id="adminNav" class="flex gap-2 mt-4 md:mt-0 hidden-view overflow-x-auto w-full md:w-auto">
+            <button onclick="switchAdminTab('orders')" id="tabOrders" class="px-4 py-2 font-bold bg-gray-800 text-white rounded-lg whitespace-nowrap">الطلبات الواردة</button>
+            <button onclick="switchAdminTab('reports')" id="tabReports" class="px-4 py-2 font-bold bg-gray-200 text-gray-700 rounded-lg whitespace-nowrap">التقارير</button>
+            <button onclick="switchAdminTab('settings')" id="tabSettings" class="px-4 py-2 font-bold bg-gray-200 text-gray-700 rounded-lg whitespace-nowrap">الإعدادات</button>
+        </div>
+        <button onclick="logout()" class="bg-red-500 text-white px-5 py-2 rounded-lg font-bold hover:bg-red-600 mt-4 md:mt-0">تسجيل الخروج</button>
+    </div>
+
+    <div class="w-full max-w-7xl bg-white rounded-2xl shadow-xl border border-gray-200 mb-10 min-h-[70vh]">
+        
+        <div id="loginView" class="p-10 flex flex-col items-center justify-center py-32">
+            <h1 class="text-4xl font-black text-gray-800 mb-2">النظام المركزي</h1>
+            <p class="text-gray-500 mb-8">أدخل رمز الدخول</p>
+            <form onsubmit="handleLogin(event)" class="w-full max-w-sm flex flex-col gap-4">
+                <input type="password" id="loginCode" required autocomplete="off" placeholder="الرمز..." class="w-full text-center p-4 text-3xl tracking-[0.5em] font-bold border-2 rounded-xl focus:border-blue-500 outline-none bg-gray-50">
+                <button type="submit" id="btnLogin" class="w-full bg-blue-600 text-white font-black py-4 rounded-xl text-lg hover:bg-blue-700">دخول</button>
+            </form>
+            <p id="loginError" class="text-red-500 mt-4 font-bold hidden-view">الكود غير صحيح.</p>
+        </div>
+
+        <div id="userView" class="p-8 hidden-view">
+            <div id="userNewOrderSection">
+                <form id="orderForm" onsubmit="submitOrder(event)" class="space-y-6">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label class="block font-bold mb-2">المسؤول</label>
+                            <input type="text" id="employeeName" readonly class="w-full p-4 border rounded-xl bg-gray-100 font-bold outline-none cursor-not-allowed">
+                        </div>
+                        <div>
+                            <label class="block font-bold mb-2">الفرع</label>
+                            <select id="branchSelect" required class="w-full p-4 border-2 rounded-xl focus:border-blue-500 outline-none font-bold bg-white"></select>
+                        </div>
+                    </div>
+                    <div id="dynamicProductsArea" class="space-y-6"></div>
+                    <button type="submit" id="submitBtn" class="w-full bg-blue-600 text-white font-black py-5 rounded-2xl text-xl hover:bg-blue-700 shadow-lg">إرسال الطلب للمطبخ المركزي</button>
+                </form>
+            </div>
+            <div id="userMyOrdersSection" class="hidden-view">
+                <div class="overflow-x-auto rounded-xl border border-gray-200">
+                    <table class="w-full text-right border-collapse bg-white">
+                        <thead class="bg-gray-100 border-b-2">
+                            <tr>
+                                <th class="p-4">التاريخ</th><th class="p-4">الفرع</th><th class="p-4">التفاصيل</th>
+                            </tr>
+                        </thead>
+                        <tbody id="myOrdersTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div id="adminView" class="p-8 hidden-view">
+            
+            <div id="adminOrdersSection">
+                <h3 class="text-2xl font-bold mb-4">الطلبات الواردة</h3>
+                <div class="overflow-x-auto rounded-xl border border-gray-200">
+                    <table class="w-full text-right border-collapse bg-white hover:cursor-pointer">
+                        <thead class="bg-gray-100 border-b-2">
+                            <tr>
+                                <th class="p-4">رقم الطلب</th><th class="p-4">التاريخ</th><th class="p-4">الفرع</th><th class="p-4">المسؤول</th>
+                            </tr>
+                        </thead>
+                        <tbody id="ordersTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="adminReportsSection" class="hidden-view">
+                <h3 class="text-2xl font-bold mb-4">تقارير إجمالي المنتجات</h3>
+                <div class="flex flex-wrap items-end gap-4 mb-6 bg-gray-50 p-4 rounded-xl border">
+                    <div>
+                        <label class="block text-sm font-bold mb-1">تحديد الفرع</label>
+                        <select id="reportBranch" class="p-2 border rounded outline-none font-bold w-48 bg-white">
+                            <option value="all">جميع الفروع</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold mb-1">من تاريخ</label>
+                        <input type="date" id="filterStart" class="p-2 border rounded outline-none font-bold">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold mb-1">إلى تاريخ</label>
+                        <input type="date" id="filterEnd" class="p-2 border rounded outline-none font-bold">
+                    </div>
+                    <div class="flex gap-2">
+                        <button onclick="generateReport()" class="bg-blue-600 text-white px-8 py-2 rounded-lg font-bold hover:bg-blue-700">تحديث البيانات</button>
+                        <button onclick="exportReportCSV()" class="bg-green-600 text-white px-8 py-2 rounded-lg font-bold hover:bg-green-700">تصدير (Excel)</button>
+                    </div>
+                </div>
+                <div class="overflow-x-auto rounded-xl border border-gray-200">
+                    <table class="w-full text-right border-collapse bg-white">
+                        <thead class="bg-gray-100 border-b-2">
+                            <tr>
+                                <th class="p-4 w-2/3">الصنف / المنتج</th>
+                                <th class="p-4 w-1/3">إجمالي الكمية المطلوبة</th>
+                            </tr>
+                        </thead>
+                        <tbody id="reportsTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="adminSettingsSection" class="hidden-view space-y-8">
+                <h3 class="text-2xl font-bold border-b pb-2">إدارة بيانات النظام</h3>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div class="bg-gray-50 p-6 rounded-xl border">
+                        <h4 class="font-bold text-lg mb-4">الفروع</h4>
+                        <div class="flex gap-2 mb-4">
+                            <input type="text" id="newBranch" placeholder="اسم الفرع" class="flex-1 p-2 border rounded">
+                            <button onclick="addSetting('branches', 'newBranch')" class="bg-green-600 text-white px-4 rounded font-bold">+</button>
+                        </div>
+                        <ul id="listBranches" class="space-y-2 max-h-48 overflow-y-auto"></ul>
+                    </div>
+
+                    <div class="bg-gray-50 p-6 rounded-xl border">
+                        <h4 class="font-bold text-lg mb-4">المستخدمين</h4>
+                        <div class="flex gap-2 mb-4">
+                            <input type="text" id="newUserName" placeholder="الاسم" class="w-1/2 p-2 border rounded">
+                            <input type="number" id="newUserCode" placeholder="كود الدخول" class="w-1/2 p-2 border rounded text-left" dir="ltr">
+                            <button onclick="addUser()" class="bg-green-600 text-white px-4 rounded font-bold">+</button>
+                        </div>
+                        <ul id="listUsers" class="space-y-2 max-h-48 overflow-y-auto"></ul>
+                    </div>
+
+                    <div class="bg-gray-50 p-6 rounded-xl border">
+                        <h4 class="font-bold text-lg mb-4">أصناف المنتجات</h4>
+                        <div class="flex gap-2 mb-4">
+                            <input type="text" id="newCategory" placeholder="اسم الصنف" class="flex-1 p-2 border rounded">
+                            <button onclick="addSetting('categories', 'newCategory')" class="bg-green-600 text-white px-4 rounded font-bold">+</button>
+                        </div>
+                        <ul id="listCategories" class="space-y-2 max-h-48 overflow-y-auto"></ul>
+                    </div>
+
+                    <div class="bg-gray-50 p-6 rounded-xl border">
+                        <h4 class="font-bold text-lg mb-4">المنتجات</h4>
+                        <div class="flex gap-2 mb-4">
+                            <input type="text" id="newProductName" placeholder="اسم المنتج" class="flex-1 p-2 border rounded">
+                            <select id="newProductCategory" class="flex-1 p-2 border rounded"></select>
+                            <button onclick="addProduct()" class="bg-green-600 text-white px-4 rounded font-bold">+</button>
+                        </div>
+                        <ul id="listProducts" class="space-y-2 max-h-48 overflow-y-auto"></ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="orderModal" class="fixed inset-0 bg-black bg-opacity-50 hidden-view flex items-center justify-center p-4 z-50">
+        <div id="printModal" class="bg-white p-8 rounded-2xl w-full max-w-2xl shadow-2xl relative">
+            <button onclick="closeModal()" class="absolute top-4 right-4 text-gray-500 hover:text-red-600 font-bold text-xl no-print">✖</button>
+            <div class="text-center mb-6 border-b pb-4">
+                <h2 class="text-3xl font-black">طلب توريد</h2>
+                <p id="modalDate" class="text-gray-500 mt-2 font-mono"></p>
+            </div>
+            <div class="grid grid-cols-2 gap-4 mb-6 bg-gray-50 p-4 rounded-lg">
+                <div><span class="font-bold">الفرع:</span> <span id="modalBranch" class="text-blue-700 font-bold"></span></div>
+                <div><span class="font-bold">المسؤول:</span> <span id="modalEmp"></span></div>
+            </div>
+            <table class="w-full text-right border-collapse mb-6">
+                <thead class="bg-gray-200">
+                    <tr><th class="p-3 border">المنتج</th><th class="p-3 border">الكمية</th></tr>
+                </thead>
+                <tbody id="modalItems"></tbody>
+            </table>
+            <div class="text-center no-print mt-8 border-t pt-4">
+                <button onclick="window.print()" class="bg-gray-800 text-white px-8 py-3 rounded-lg font-bold hover:bg-black text-lg">🖨️ طباعة الطلب</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const DB_BASE = "https://kit54652-default-rtdb.europe-west1.firebasedatabase.app";
+        const ADMIN_CODE = "51379";
+        
+        let globalData = { orders: {}, users: {}, branches: {}, categories: {}, products: {}, currentUsername: "", currentReportData: [] };
+
+        async function fetchDB(path) { try { let res = await fetch(`${DB_BASE}/${path}.json`); return await res.json() || {}; } catch (e) { return {}; } }
+        async function putDB(path, data) { await fetch(`${DB_BASE}/${path}.json`, { method: 'PUT', body: JSON.stringify(data) }); }
+        async function postDB(path, data) { await fetch(`${DB_BASE}/${path}.json`, { method: 'POST', body: JSON.stringify(data) }); }
+        async function deleteDB(path) { await fetch(`${DB_BASE}/${path}.json`, { method: 'DELETE' }); }
+
+        function hideAllViews() { ['loginView', 'userView', 'adminView', 'userNav', 'adminNav'].forEach(id => document.getElementById(id).classList.add('hidden-view')); }
+
+        async function logout() {
+            document.getElementById('loginCode').value = '';
+            document.getElementById('topBar').classList.add('hidden-view');
+            hideAllViews();
+            document.getElementById('loginView').classList.remove('hidden-view');
+            globalData.currentUsername = "";
+        }
+
+        async function initData() {
+            [globalData.branches, globalData.categories, globalData.products, globalData.users, globalData.orders] = await Promise.all([
+                fetchDB('settings/branches'), fetchDB('settings/categories'), fetchDB('settings/products'), fetchDB('users'), fetchDB('orders')
+            ]);
+        }
+
+        async function handleLogin(e) {
+            e.preventDefault();
+            const code = document.getElementById('loginCode').value.trim();
+            const btn = document.getElementById('btnLogin');
+            const err = document.getElementById('loginError');
+            
+            err.classList.add('hidden-view');
+            btn.innerHTML = '<span class="spinner"></span>';
+            await initData();
+
+            if (code === ADMIN_CODE) {
+                globalData.currentUsername = "الإدارة";
+                document.getElementById('currentUserDisplay').innerText = globalData.currentUsername;
+                hideAllViews();
+                document.getElementById('topBar').classList.remove('hidden-view');
+                document.getElementById('adminNav').classList.remove('hidden-view');
+                document.getElementById('adminView').classList.remove('hidden-view');
+                switchAdminTab('orders');
+            } else if (globalData.users[code]) {
+                globalData.currentUsername = globalData.users[code].name;
+                document.getElementById('currentUserDisplay').innerText = globalData.currentUsername;
+                document.getElementById('employeeName').value = globalData.currentUsername;
+                hideAllViews();
+                document.getElementById('topBar').classList.remove('hidden-view');
+                document.getElementById('userNav').classList.remove('hidden-view');
+                document.getElementById('userView').classList.remove('hidden-view');
+                switchUserTab('newOrder');
+            } else { err.classList.remove('hidden-view'); }
+            btn.innerHTML = 'دخول';
+        }
+
+        function switchUserTab(tab) {
+            document.getElementById('userNewOrderSection').classList.add('hidden-view');
+            document.getElementById('userMyOrdersSection').classList.add('hidden-view');
+            document.getElementById('tabNewOrder').className = "px-4 py-2 font-bold bg-gray-200 text-gray-700 rounded-lg";
+            document.getElementById('tabMyOrders').className = "px-4 py-2 font-bold bg-gray-200 text-gray-700 rounded-lg";
+
+            if(tab === 'newOrder') {
+                document.getElementById('userNewOrderSection').classList.remove('hidden-view');
+                document.getElementById('tabNewOrder').className = "px-4 py-2 font-bold bg-blue-600 text-white rounded-lg";
+                renderOrderForm();
+            } else {
+                document.getElementById('userMyOrdersSection').classList.remove('hidden-view');
+                document.getElementById('tabMyOrders').className = "px-4 py-2 font-bold bg-blue-600 text-white rounded-lg";
+                renderMyOrders();
+            }
+        }
+
+        function renderOrderForm() {
+            const branchSel = document.getElementById('branchSelect');
+            branchSel.innerHTML = '<option value="">اختر الفرع...</option>';
+            Object.values(globalData.branches).forEach(b => { branchSel.innerHTML += `<option value="${b.name}">${b.name}</option>`; });
+
+            const area = document.getElementById('dynamicProductsArea');
+            area.innerHTML = '';
+            Object.keys(globalData.categories).forEach(catId => {
+                const catName = globalData.categories[catId].name;
+                const prods = Object.values(globalData.products).filter(p => p.category === catId);
+                
+                if(prods.length > 0) {
+                    let html = `<div class="bg-blue-50 p-6 rounded-2xl border border-blue-100">
+                                <h3 class="font-black mb-4 text-blue-800 text-xl border-b border-blue-200 pb-2">${catName}</h3>
+                                <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">`;
+                    prods.forEach(p => {
+                        html += `<div class="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+                                    <label class="block font-bold mb-2 text-center text-sm">${p.name}</label>
+                                    <input type="number" min="0" value="0" data-name="${p.name}" class="order-item-input w-full p-2 border rounded-lg text-center text-xl font-bold focus:ring-2 focus:ring-blue-500 outline-none">
+                                 </div>`;
+                    });
+                    html += `</div></div>`;
+                    area.innerHTML += html;
+                }
+            });
+        }
+
+        async function submitOrder(e) {
+            e.preventDefault();
+            const btn = document.getElementById('submitBtn');
+            const items = [];
+            
+            document.querySelectorAll('.order-item-input').forEach(input => {
+                let val = parseInt(input.value);
+                if(val > 0) items.push({ name: input.getAttribute('data-name'), qty: val });
+            });
+
+            if(items.length === 0) return alert("اختر منتج واحد على الأقل.");
+
+            const data = {
+                timestamp: new Date().toISOString(),
+                displayDate: new Date().toLocaleString('ar-SA'),
+                employee: globalData.currentUsername,
+                branch: document.getElementById('branchSelect').value,
+                items: items
+            };
+
+            btn.innerHTML = '<span class="spinner"></span>';
+            btn.disabled = true;
+
+            await postDB('orders', data);
+            await initData();
+            
+            alert("تم إرسال الطلب بنجاح.");
+            document.getElementById('orderForm').reset();
+            renderOrderForm();
+            btn.innerHTML = 'إرسال الطلب للمطبخ المركزي';
+            btn.disabled = false;
+        }
+
+        function renderMyOrders() {
+            const tbody = document.getElementById('myOrdersTableBody');
+            tbody.innerHTML = '';
+            const myOrders = Object.values(globalData.orders).filter(o => o.employee === globalData.currentUsername).reverse();
+            
+            if(myOrders.length === 0) { tbody.innerHTML = '<tr><td colspan="3" class="p-4 text-center">لا توجد طلبات سابقة.</td></tr>'; return; }
+            
+            myOrders.forEach(o => {
+                let itemsTxt = "";
+                // حماية من الطلبات القديمة
+                if (Array.isArray(o.items)) {
+                    itemsTxt = o.items.map(i => `${i.name}: ${i.qty}`).join(' | ');
+                } else {
+                    itemsTxt = "طلب مسجل بالنسخة القديمة";
+                }
+
+                tbody.innerHTML += `
+                    <tr class="border-b hover:bg-gray-50">
+                        <td class="p-4 font-mono text-sm">${o.displayDate}</td>
+                        <td class="p-4 font-bold text-blue-800">${o.branch}</td>
+                        <td class="p-4 text-sm bg-gray-50">${itemsTxt}</td>
+                    </tr>`;
+            });
+        }
+
+        function switchAdminTab(tab) {
+            ['adminOrdersSection', 'adminReportsSection', 'adminSettingsSection'].forEach(id => document.getElementById(id).classList.add('hidden-view'));
+            ['tabOrders', 'tabReports', 'tabSettings'].forEach(id => document.getElementById(id).className = "px-4 py-2 font-bold bg-gray-200 text-gray-700 rounded-lg whitespace-nowrap");
+
+            if(tab === 'orders') {
+                document.getElementById('adminOrdersSection').classList.remove('hidden-view');
+                document.getElementById('tabOrders').classList.replace('bg-gray-200', 'bg-gray-800');
+                document.getElementById('tabOrders').classList.replace('text-gray-700', 'text-white');
+                renderAdminOrders();
+            } else if(tab === 'reports') {
+                document.getElementById('adminReportsSection').classList.remove('hidden-view');
+                document.getElementById('tabReports').classList.replace('bg-gray-200', 'bg-gray-800');
+                document.getElementById('tabReports').classList.replace('text-gray-700', 'text-white');
+                
+                const reportBranchSel = document.getElementById('reportBranch');
+                reportBranchSel.innerHTML = '<option value="all">جميع الفروع</option>';
+                Object.values(globalData.branches).forEach(b => {
+                    reportBranchSel.innerHTML += `<option value="${b.name}">${b.name}</option>`;
+                });
+                
+                generateReport();
+            } else {
+                document.getElementById('adminSettingsSection').classList.remove('hidden-view');
+                document.getElementById('tabSettings').classList.replace('bg-gray-200', 'bg-gray-800');
+                document.getElementById('tabSettings').classList.replace('text-gray-700', 'text-white');
+                renderSettings();
+            }
+        }
+
+        function renderAdminOrders() {
+            const tbody = document.getElementById('ordersTableBody');
+            tbody.innerHTML = '';
+            const ordersList = Object.entries(globalData.orders).reverse();
+            
+            if(ordersList.length === 0) { tbody.innerHTML = '<tr><td colspan="4" class="p-4 text-center font-bold">لا توجد طلبات.</td></tr>'; return; }
+            
+            ordersList.forEach(([id, o]) => {
+                let orderId = id.substring(1, 7).toUpperCase();
+                tbody.innerHTML += `
+                    <tr class="border-b hover:bg-blue-50 transition" onclick='openModal(${JSON.stringify(o)})'>
+                        <td class="p-4 font-mono font-bold text-gray-500">#${orderId}</td>
+                        <td class="p-4 font-mono text-sm">${o.displayDate}</td>
+                        <td class="p-4 font-bold text-blue-800">${o.branch}</td>
+                        <td class="p-4">${o.employee}</td>
+                    </tr>`;
+            });
+        }
+
+        function openModal(order) {
+            document.getElementById('modalDate').innerText = order.displayDate;
+            document.getElementById('modalBranch').innerText = order.branch;
+            document.getElementById('modalEmp').innerText = order.employee;
+            
+            const tbody = document.getElementById('modalItems');
+            tbody.innerHTML = '';
+            
+            // قراءة للطلبات الجديدة والقديمة
+            if (Array.isArray(order.items)) {
+                order.items.forEach(i => {
+                    tbody.innerHTML += `<tr class="border-b"><td class="p-3 border font-bold">${i.name}</td><td class="p-3 border text-xl">${i.qty}</td></tr>`;
+                });
+            } else if (typeof order.items === 'object') {
+                if(order.items.chicken && order.items.chicken > 0) tbody.innerHTML += `<tr class="border-b"><td class="p-3 border font-bold">دجاج</td><td class="p-3 border text-xl">${order.items.chicken}</td></tr>`;
+                if(order.items.potato && order.items.potato > 0) tbody.innerHTML += `<tr class="border-b"><td class="p-3 border font-bold">بطاطس</td><td class="p-3 border text-xl">${order.items.potato}</td></tr>`;
+                if(order.items.sauce && order.items.sauce > 0) tbody.innerHTML += `<tr class="border-b"><td class="p-3 border font-bold">صوص</td><td class="p-3 border text-xl">${order.items.sauce}</td></tr>`;
+                if(order.items.rice && order.items.rice > 0) tbody.innerHTML += `<tr class="border-b"><td class="p-3 border font-bold">أرز</td><td class="p-3 border text-xl">${order.items.rice}</td></tr>`;
+            }
+            
+            document.getElementById('orderModal').classList.remove('hidden-view');
+        }
+        function closeModal() { document.getElementById('orderModal').classList.add('hidden-view'); }
+
+        function generateReport() {
+            const start = document.getElementById('filterStart').value;
+            const end = document.getElementById('filterEnd').value;
+            const branch = document.getElementById('reportBranch').value;
+            const tbody = document.getElementById('reportsTableBody');
+            tbody.innerHTML = '';
+
+            let filtered = Object.values(globalData.orders);
+            
+            if(start) filtered = filtered.filter(o => o.timestamp && o.timestamp.split('T')[0] >= start);
+            if(end) filtered = filtered.filter(o => o.timestamp && o.timestamp.split('T')[0] <= end);
+            if(branch !== 'all') filtered = filtered.filter(o => o.branch === branch);
+
+            let itemTotals = {};
+            
+            filtered.forEach(order => {
+                // توافق مع النظام الجديد
+                if (Array.isArray(order.items)) {
+                    order.items.forEach(item => {
+                        if(!itemTotals[item.name]) itemTotals[item.name] = 0;
+                        itemTotals[item.name] += parseInt(item.qty) || 0;
+                    });
+                } 
+                // توافق مع النظام القديم (النسخة الأولى)
+                else if (order.items && typeof order.items === 'object') {
+                    if(order.items.chicken) itemTotals['دجاج'] = (itemTotals['دجاج'] || 0) + parseInt(order.items.chicken);
+                    if(order.items.potato) itemTotals['بطاطس'] = (itemTotals['بطاطس'] || 0) + parseInt(order.items.potato);
+                    if(order.items.sauce) itemTotals['صوص'] = (itemTotals['صوص'] || 0) + parseInt(order.items.sauce);
+                    if(order.items.rice) itemTotals['أرز'] = (itemTotals['أرز'] || 0) + parseInt(order.items.rice);
+                }
+            });
+
+            let sortedItems = Object.entries(itemTotals).sort((a, b) => b[1] - a[1]);
+
+            if(sortedItems.length === 0) { 
+                tbody.innerHTML = '<tr><td colspan="2" class="p-8 text-center font-bold text-gray-500">لا توجد منتجات مسجلة بناءً على الفرز المحدد.</td></tr>'; 
+                globalData.currentReportData = [];
+                return; 
+            }
+
+            sortedItems.forEach(([itemName, totalQty]) => {
+                if(totalQty > 0) { // عشان ما يعرض المنتجات اللي كميتها صفر
+                    tbody.innerHTML += `
+                        <tr class="border-b hover:bg-gray-50">
+                            <td class="p-4 font-bold text-gray-800 text-lg">${itemName}</td>
+                            <td class="p-4 font-black text-blue-600 text-xl">${totalQty}</td>
+                        </tr>`;
+                }
+            });
+            
+            globalData.currentReportData = sortedItems.filter(item => item[1] > 0);
+        }
+
+        function exportReportCSV() {
+            if(!globalData.currentReportData || globalData.currentReportData.length === 0) return alert("لا توجد بيانات لتصديرها.");
+            
+            let branchName = document.getElementById('reportBranch').value === 'all' ? 'جميع_الفروع' : document.getElementById('reportBranch').value;
+            let csv = "المنتج,إجمالي الكمية المطلوبة\n";
+            
+            globalData.currentReportData.forEach(([itemName, totalQty]) => { csv += `"${itemName}","${totalQty}"\n`; });
+            
+            const link = document.createElement("a");
+            link.setAttribute("href", "data:text/csv;charset=utf-8,\uFEFF" + encodeURI(csv));
+            link.setAttribute("download", `تقرير_المنتجات_${branchName}_${new Date().toLocaleDateString('ar-SA')}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        function renderSettings() {
+            renderList('branches', 'listBranches', b => b.name);
+            renderList('categories', 'listCategories', c => c.name);
+            
+            const catSel = document.getElementById('newProductCategory');
+            catSel.innerHTML = '<option value="">اختر الصنف...</option>';
+            Object.entries(globalData.categories).forEach(([id, c]) => { catSel.innerHTML += `<option value="${id}">${c.name}</option>`; });
+
+            const prodUl = document.getElementById('listProducts');
+            prodUl.innerHTML = '';
+            Object.entries(globalData.products).forEach(([id, p]) => {
+                let catName = globalData.categories[p.category] ? globalData.categories[p.category].name : 'غير محدد';
+                prodUl.innerHTML += `<li class="flex justify-between items-center p-2 bg-white border rounded">
+                    <span><b>${p.name}</b> <span class="text-xs text-gray-500">(${catName})</span></span>
+                    <button onclick="delSetting('settings/products/${id}')" class="text-red-500 font-bold">حذف</button></li>`;
+            });
+
+            const userUl = document.getElementById('listUsers');
+            userUl.innerHTML = '';
+            Object.entries(globalData.users).forEach(([code, u]) => {
+                userUl.innerHTML += `<li class="flex justify-between items-center p-2 bg-white border rounded">
+                    <span><b>${u.name}</b> <span class="text-xs text-blue-500" dir="ltr">[${code}]</span></span>
+                    <button onclick="delSetting('users/${code}')" class="text-red-500 font-bold">حذف</button></li>`;
+            });
+        }
+
+        function renderList(dbKey, elementId, displayFunc) {
+            const ul = document.getElementById(elementId);
+            ul.innerHTML = '';
+            Object.entries(globalData[dbKey]).forEach(([id, item]) => {
+                ul.innerHTML += `<li class="flex justify-between items-center p-2 bg-white border rounded">
+                    <span>${displayFunc(item)}</span>
+                    <button onclick="delSetting('settings/${dbKey}/${id}')" class="text-red-500 font-bold">حذف</button></li>`;
+            });
+        }
+
+        async function addSetting(dbPath, inputId) {
+            const val = document.getElementById(inputId).value.trim();
+            if(!val) return;
+            await postDB(`settings/${dbPath}`, { name: val });
+            document.getElementById(inputId).value = '';
+            await initData(); renderSettings();
+        }
+
+        async function addProduct() {
+            const name = document.getElementById('newProductName').value.trim();
+            const cat = document.getElementById('newProductCategory').value;
+            if(!name || !cat) return alert("أدخل الاسم واختر الصنف.");
+            await postDB(`settings/products`, { name: name, category: cat });
+            document.getElementById('newProductName').value = '';
+            await initData(); renderSettings();
+        }
+
+        async function addUser() {
+            const name = document.getElementById('newUserName').value.trim();
+            const code = document.getElementById('newUserCode').value.trim();
+            if(!name || !code) return;
+            if(code === ADMIN_CODE) return alert("لا تستخدم كود الإدارة.");
+            await putDB(`users/${code}`, { name: name });
+            document.getElementById('newUserName').value = '';
+            document.getElementById('newUserCode').value = '';
+            await initData(); renderSettings();
+        }
+
+        async function delSetting(path) {
+            if(!confirm("متأكد من الحذف؟")) return;
+            await deleteDB(path);
+            await initData(); renderSettings();
+        }
+    </script>
+</body>
+</html>
