@@ -42,7 +42,7 @@
     <div class="w-full max-w-7xl bg-white rounded-2xl shadow-xl border border-gray-200 mb-10 min-h-[70vh]">
         
         <div id="loginView" class="p-10 flex flex-col items-center justify-center py-32">
-            <h1 class="text-4xl font-black text-gray-800 mb-2">نظام طلبات التوريد من المطبخ المركزي</h1>
+            <h1 class="text-4xl font-black text-gray-800 mb-2">نظام التوريد من المطبخ المركزي</h1>
             <p class="text-gray-500 mb-8">أدخل رمز الدخول</p>
             <form onsubmit="handleLogin(event)" class="w-full max-w-sm flex flex-col gap-4">
                 <input type="password" id="loginCode" required autocomplete="off" placeholder="الرمز..." class="w-full text-center p-4 text-3xl tracking-[0.5em] font-bold border-2 rounded-xl focus:border-blue-500 outline-none bg-gray-50">
@@ -170,7 +170,7 @@
     <script>
         const DB_BASE = "https://kit54652-default-rtdb.europe-west1.firebasedatabase.app";
         const ADMIN_CODE = "51379";
-        const DELETE_PIN = "513795"; // الرمز السري للحذف
+        const DELETE_PIN = "513795";
         
         let globalData = { orders: {}, users: {}, branches: {}, categories: {}, products: {}, currentUsername: "" };
 
@@ -223,7 +223,7 @@
             else document.getElementById('adminNav').classList.remove('hidden-view');
         }
 
-        // واجهة الفروع المحدثة
+        // واجهة الفروع
         function renderOrderForm() {
             const branchSel = document.getElementById('branchSelect');
             branchSel.innerHTML = '<option value="">اختر الفرع...</option>';
@@ -311,7 +311,23 @@
             ['orders', 'reports', 'settings'].forEach(t => document.getElementById(`tab${t.charAt(0).toUpperCase() + t.slice(1)}`).className = "px-4 py-2 font-bold bg-gray-200 text-gray-700 rounded-lg whitespace-nowrap");
             document.getElementById(`admin${tab.charAt(0).toUpperCase() + tab.slice(1)}Section`).classList.remove('hidden-view');
             document.getElementById(`tab${tab.charAt(0).toUpperCase() + tab.slice(1)}`).className = "px-4 py-2 font-bold bg-gray-800 text-white rounded-lg whitespace-nowrap";
-            if(tab === 'orders') renderAdminOrders(); else if(tab === 'reports') generateReport(); else renderSettings();
+            
+            if(tab === 'orders') {
+                renderAdminOrders(); 
+            } else if(tab === 'reports') {
+                // جلب قائمة الفروع للتقارير
+                const reportBranchSel = document.getElementById('reportBranch');
+                const prevVal = reportBranchSel.value; // حفظ التحديد الحالي
+                reportBranchSel.innerHTML = '<option value="all">جميع الفروع</option>';
+                Object.values(globalData.branches).forEach(b => {
+                    reportBranchSel.innerHTML += `<option value="${b.name}">${b.name}</option>`;
+                });
+                if(prevVal) reportBranchSel.value = prevVal; // إرجاع التحديد
+                
+                generateReport(); 
+            } else {
+                renderSettings();
+            }
         }
 
         function renderAdminOrders() {
@@ -345,7 +361,6 @@
             });
         }
 
-        // --- نظام التعديل والحذف الجديد ---
         function renderSettings() {
             renderList('branches', 'listBranches', b => b.name);
             renderList('categories', 'listCategories', c => c.name);
@@ -390,7 +405,6 @@
             });
         }
 
-        // دوال الإضافة
         async function addSetting(path, inputId) {
             const val = document.getElementById(inputId).value.trim(); if(!val) return;
             await postDB(`settings/${path}`, { name: val }); document.getElementById(inputId).value = ''; await initData(); renderSettings();
@@ -406,7 +420,6 @@
             document.getElementById('newProductName').value = ''; await initData(); renderSettings();
         }
 
-        // دوال التعديل
         async function editSetting(key, id, oldName) {
             let newName = prompt("أدخل الاسم الجديد:", oldName);
             if (newName && newName.trim() !== "" && newName !== oldName) {
@@ -429,7 +442,6 @@
             }
         }
 
-        // دالة الحذف الآمنة (بالرقم السري)
         async function secureDelete(path) {
             let pass = prompt("لإتمام الحذف، الرجاء إدخال الرمز السري للحذف:");
             if (pass === DELETE_PIN) {
