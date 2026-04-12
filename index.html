@@ -12,11 +12,38 @@
         .spinner { border: 3px solid #f3f3f3; border-top: 3px solid #3498db; border-radius: 50%; width: 20px; height: 20px; animation: spin 1s linear infinite; display: inline-block; vertical-align: middle; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         
+        /* إعدادات الطباعة الجديدة (تمنع اختفاء العناوين والتواريخ) */
         @media print {
-            body * { visibility: hidden; }
-            #printModal, #printModal * { visibility: visible; }
-            #printModal { position: absolute; left: 0; top: 0; width: 100%; box-shadow: none; border: none; }
+            @page { margin: 1cm; } /* هوامش ورقة الـ A4 */
+            body { background-color: white !important; }
+            
+            /* إخفاء التطبيق الرئيسي بالكامل وقت الطباعة */
+            #topBar, #mainApp { display: none !important; }
+            
+            /* تحويل نافذة الطباعة إلى مستند أساسي */
+            #orderModal { 
+                position: static !important; 
+                display: block !important; 
+                background: transparent !important; 
+                padding: 0 !important; 
+            }
+            #printModal { 
+                position: static !important; 
+                width: 100% !important; 
+                max-width: 100% !important; 
+                box-shadow: none !important; 
+                padding: 0 !important; 
+                margin: 0 !important; 
+                max-height: none !important; 
+                overflow: visible !important; 
+            }
+            
+            /* إخفاء أي أزرار لا نحتاجها في الطباعة */
             .no-print { display: none !important; }
+            
+            /* منع قص المنتجات بين الصفحات */
+            tr { page-break-inside: avoid; }
+            thead { display: table-header-group; }
         }
 
         .qty-btn { width: 45px; height: 45px; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; font-weight: bold; border-radius: 10px; transition: all 0.2s; user-select: none; }
@@ -39,7 +66,7 @@
         <button onclick="logout()" class="bg-red-500 text-white px-5 py-2 rounded-lg font-bold hover:bg-red-600 mt-4 md:mt-0">تسجيل الخروج</button>
     </div>
 
-    <div class="w-full max-w-7xl bg-white rounded-2xl shadow-xl border border-gray-200 mb-10 min-h-[70vh]">
+    <div id="mainApp" class="w-full max-w-7xl bg-white rounded-2xl shadow-xl border border-gray-200 mb-10 min-h-[70vh]">
         
         <div id="loginView" class="p-10 flex flex-col items-center justify-center py-32">
             <h1 class="text-4xl font-black text-gray-800 mb-2">نظام التوريد من المطبخ المركزي</h1>
@@ -98,7 +125,7 @@
                     <div><label class="block text-sm font-bold mb-1">إلى تاريخ</label><input type="date" id="filterEnd" class="p-2 border rounded outline-none font-bold"></div>
                     <div class="flex gap-2">
                         <button onclick="generateReport()" class="bg-blue-600 text-white px-8 py-2 rounded-lg font-bold hover:bg-blue-700">تحديث</button>
-                        <button onclick="exportReportCSV()" class="bg-green-600 text-white px-8 py-2 rounded-lg font-bold hover:bg-green-700">تصدير</button>
+                        <button onclick="exportReportCSV()" class="bg-green-600 text-white px-8 py-2 rounded-lg font-bold hover:bg-green-700">تصدير CSV</button>
                     </div>
                 </div>
                 <div class="overflow-x-auto rounded-xl border border-gray-200">
@@ -152,7 +179,7 @@
     </div>
 
     <div id="orderModal" class="fixed inset-0 bg-black bg-opacity-50 hidden-view flex items-center justify-center p-4 z-50">
-        <div id="printModal" class="bg-white p-6 md:p-8 rounded-2xl w-full max-w-2xl shadow-2xl relative max-h-[90vh] overflow-y-auto print:max-h-none print:overflow-visible">
+        <div id="printModal" class="bg-white p-6 md:p-8 rounded-2xl w-full max-w-2xl shadow-2xl relative max-h-[90vh] overflow-y-auto">
             
             <div class="sticky top-0 z-20 flex justify-end no-print -mt-2 -ml-2 mb-2">
                 <button onclick="closeModal()" class="bg-gray-100 text-gray-600 hover:bg-red-100 hover:text-red-600 font-bold text-xl w-10 h-10 rounded-full flex items-center justify-center shadow-sm transition">✖</button>
@@ -160,9 +187,9 @@
 
             <div class="text-center mb-6 border-b pb-4">
                 <h2 class="text-3xl font-black">طلب توريد</h2>
-                <p id="modalDate" class="text-gray-500 mt-2 font-mono"></p>
+                <p id="modalDate" class="text-gray-500 mt-2 font-mono font-bold text-lg"></p>
             </div>
-            <div class="grid grid-cols-2 gap-4 mb-6 bg-gray-50 p-4 rounded-lg">
+            <div class="grid grid-cols-2 gap-4 mb-6 bg-gray-50 p-4 rounded-lg text-lg">
                 <div><span class="font-bold">الفرع:</span> <span id="modalBranch" class="text-blue-700 font-bold"></span></div>
                 <div><span class="font-bold">المسؤول:</span> <span id="modalEmp"></span></div>
             </div>
@@ -183,13 +210,19 @@
         const ADMIN_CODE = "51379";
         const DELETE_PIN = "513795";
         
-        let globalData = { orders: {}, users: {}, branches: {}, categories: {}, products: {}, currentUsername: "" };
+        let globalData = { orders: {}, users: {}, branches: {}, categories: {}, products: {}, currentUsername: "", currentReportData: [] };
 
         async function fetchDB(path) { try { let res = await fetch(`${DB_BASE}/${path}.json`); return await res.json() || {}; } catch (e) { return {}; } }
         async function putDB(path, data) { await fetch(`${DB_BASE}/${path}.json`, { method: 'PUT', body: JSON.stringify(data) }); }
         async function postDB(path, data) { await fetch(`${DB_BASE}/${path}.json`, { method: 'POST', body: JSON.stringify(data) }); }
         async function updateDB(path, data) { await fetch(`${DB_BASE}/${path}.json`, { method: 'PATCH', body: JSON.stringify(data) }); }
         async function deleteDB(path) { await fetch(`${DB_BASE}/${path}.json`, { method: 'DELETE' }); }
+
+        // دالة توليد التاريخ الميلادي الموحد للجميع
+        function getGregorianDate() {
+            // باستخدام en-GB يعطينا التاريخ ميلادي صريح DD/MM/YYYY مهما كان تقويم الجوال
+            return new Date().toLocaleString('en-GB', { hour12: true });
+        }
 
         function hideAllViews() { ['loginView', 'userView', 'adminView', 'userNav', 'adminNav'].forEach(id => document.getElementById(id).classList.add('hidden-view')); }
         
@@ -234,7 +267,6 @@
             else document.getElementById('adminNav').classList.remove('hidden-view');
         }
 
-        // واجهة الفروع
         function renderOrderForm() {
             const branchSel = document.getElementById('branchSelect');
             branchSel.innerHTML = '<option value="">اختر الفرع...</option>';
@@ -285,10 +317,15 @@
                 if(val > 0) items.push({ name: input.getAttribute('data-name'), qty: val });
             });
             if(items.length === 0) return alert("الرجاء تحديد صنف واحد على الأقل.");
+            
             const data = {
-                timestamp: new Date().toISOString(), displayDate: new Date().toLocaleString('ar-SA'),
-                employee: globalData.currentUsername, branch: document.getElementById('branchSelect').value, items: items
+                timestamp: new Date().toISOString(), 
+                displayDate: getGregorianDate(), // تم تطبيق التاريخ الميلادي الإجباري
+                employee: globalData.currentUsername, 
+                branch: document.getElementById('branchSelect').value, 
+                items: items
             };
+            
             document.getElementById('submitBtn').disabled = true;
             await postDB('orders', data);
             alert("تم إرسال الطلب بنجاح.");
@@ -312,11 +349,10 @@
             const my = Object.values(globalData.orders).filter(o => o.employee === globalData.currentUsername).reverse();
             my.forEach(o => {
                 let txt = Array.isArray(o.items) ? o.items.map(i => `${i.name}: ${i.qty}`).join(' | ') : "بيانات قديمة";
-                tbody.innerHTML += `<tr class="border-b"><td class="p-4 font-mono text-sm">${o.displayDate}</td><td class="p-4 font-bold">${o.branch}</td><td class="p-4 text-sm">${txt}</td></tr>`;
+                tbody.innerHTML += `<tr class="border-b"><td class="p-4 font-mono text-sm" dir="ltr">${o.displayDate}</td><td class="p-4 font-bold">${o.branch}</td><td class="p-4 text-sm">${txt}</td></tr>`;
             });
         }
 
-        // دوال الإدارة
         function switchAdminTab(tab) {
             ['orders', 'reports', 'settings'].forEach(t => document.getElementById(`admin${t.charAt(0).toUpperCase() + t.slice(1)}Section`).classList.add('hidden-view'));
             ['orders', 'reports', 'settings'].forEach(t => document.getElementById(`tab${t.charAt(0).toUpperCase() + t.slice(1)}`).className = "px-4 py-2 font-bold bg-gray-200 text-gray-700 rounded-lg whitespace-nowrap");
@@ -343,7 +379,7 @@
         function renderAdminOrders() {
             const tbody = document.getElementById('ordersTableBody'); tbody.innerHTML = '';
             Object.entries(globalData.orders).reverse().forEach(([id, o]) => {
-                tbody.innerHTML += `<tr class="border-b hover:bg-blue-50" onclick='openModal(${JSON.stringify(o)})'><td class="p-4 font-mono text-gray-500">#${id.slice(-5).toUpperCase()}</td><td class="p-4">${o.displayDate}</td><td class="p-4 font-bold">${o.branch}</td><td class="p-4">${o.employee}</td></tr>`;
+                tbody.innerHTML += `<tr class="border-b hover:bg-blue-50" onclick='openModal(${JSON.stringify(o)})'><td class="p-4 font-mono text-gray-500">#${id.slice(-5).toUpperCase()}</td><td class="p-4" dir="ltr">${o.displayDate}</td><td class="p-4 font-bold">${o.branch}</td><td class="p-4">${o.employee}</td></tr>`;
             });
         }
 
@@ -352,23 +388,71 @@
             document.getElementById('modalBranch').innerText = o.branch;
             document.getElementById('modalEmp').innerText = o.employee;
             const tb = document.getElementById('modalItems'); tb.innerHTML = '';
-            if(Array.isArray(o.items)) o.items.forEach(i => { tb.innerHTML += `<tr><td class="p-3 border font-bold">${i.name}</td><td class="p-3 border text-xl">${i.qty}</td></tr>`; });
+            if(Array.isArray(o.items)) o.items.forEach(i => { tb.innerHTML += `<tr><td class="p-3 border font-bold text-lg">${i.name}</td><td class="p-3 border text-2xl font-black">${i.qty}</td></tr>`; });
             document.getElementById('orderModal').classList.remove('hidden-view');
         }
         function closeModal() { document.getElementById('orderModal').classList.add('hidden-view'); }
 
         function generateReport() {
-            const start = document.getElementById('filterStart').value; const end = document.getElementById('filterEnd').value;
-            const branch = document.getElementById('reportBranch').value; let filtered = Object.values(globalData.orders);
+            const start = document.getElementById('filterStart').value; 
+            const end = document.getElementById('filterEnd').value;
+            const branch = document.getElementById('reportBranch').value; 
+            let filtered = Object.values(globalData.orders);
+            
             if(start) filtered = filtered.filter(o => o.timestamp && o.timestamp.split('T')[0] >= start);
             if(end) filtered = filtered.filter(o => o.timestamp && o.timestamp.split('T')[0] <= end);
             if(branch !== 'all') filtered = filtered.filter(o => o.branch === branch);
+            
             let totals = {};
-            filtered.forEach(o => { if(Array.isArray(o.items)) o.items.forEach(i => { totals[i.name] = (totals[i.name] || 0) + parseInt(i.qty); })});
-            const tb = document.getElementById('reportsTableBody'); tb.innerHTML = '';
-            Object.entries(totals).sort((a,b)=>b[1]-a[1]).forEach(([name, qty]) => {
-                tb.innerHTML += `<tr class="border-b"><td class="p-4 font-bold">${name}</td><td class="p-4 font-black text-blue-600 text-xl">${qty}</td></tr>`;
+            filtered.forEach(o => { 
+                if(Array.isArray(o.items)) {
+                    o.items.forEach(i => { totals[i.name] = (totals[i.name] || 0) + parseInt(i.qty); })
+                }
             });
+            
+            const tb = document.getElementById('reportsTableBody'); 
+            tb.innerHTML = '';
+            let sortedTotals = Object.entries(totals).sort((a,b)=>b[1]-a[1]);
+            
+            globalData.currentReportData = sortedTotals; // حفظ للتصدير
+
+            if(sortedTotals.length === 0) {
+                tb.innerHTML = '<tr><td colspan="2" class="p-8 text-center text-gray-500 font-bold">لا توجد منتجات مباعة في هذا الفرز</td></tr>';
+                return;
+            }
+
+            sortedTotals.forEach(([name, qty]) => {
+                if (qty > 0) {
+                    tb.innerHTML += `<tr class="border-b hover:bg-gray-50"><td class="p-4 font-bold text-lg">${name}</td><td class="p-4 font-black text-blue-600 text-xl">${qty}</td></tr>`;
+                }
+            });
+        }
+
+        // دالة تصدير CSV تدعم اللغة العربية
+        function exportReportCSV() {
+            if(!globalData.currentReportData || globalData.currentReportData.length === 0) {
+                return alert("لا توجد بيانات لتصديرها.");
+            }
+            
+            let branchName = document.getElementById('reportBranch').value === 'all' ? 'جميع_الفروع' : document.getElementById('reportBranch').value;
+            let csv = "المنتج,إجمالي الكمية المطلوبة\n";
+            
+            globalData.currentReportData.forEach(([itemName, totalQty]) => {
+                if(totalQty > 0) {
+                    csv += `"${itemName}","${totalQty}"\n`;
+                }
+            });
+            
+            const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a");
+            const url = URL.createObjectURL(blob);
+            
+            const dateStr = new Date().toLocaleDateString('en-GB').replace(/\//g, '-');
+            link.setAttribute("href", url);
+            link.setAttribute("download", `تقرير_${branchName}_${dateStr}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
         }
 
         function renderSettings() {
