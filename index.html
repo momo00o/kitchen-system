@@ -152,18 +152,29 @@
     </div>
 
     <div id="orderModal" class="fixed inset-0 bg-black bg-opacity-50 hidden-view flex items-center justify-center p-4 z-50">
-        <div id="printModal" class="bg-white p-8 rounded-2xl w-full max-w-2xl shadow-2xl relative">
-            <button onclick="closeModal()" class="absolute top-4 right-4 text-gray-500 hover:text-red-600 font-bold text-xl no-print">✖</button>
-            <div class="text-center mb-6 border-b pb-4"><h2 class="text-3xl font-black">طلب توريد</h2><p id="modalDate" class="text-gray-500 mt-2 font-mono"></p></div>
+        <div id="printModal" class="bg-white p-6 md:p-8 rounded-2xl w-full max-w-2xl shadow-2xl relative max-h-[90vh] overflow-y-auto print:max-h-none print:overflow-visible">
+            
+            <div class="sticky top-0 z-20 flex justify-end no-print -mt-2 -ml-2 mb-2">
+                <button onclick="closeModal()" class="bg-gray-100 text-gray-600 hover:bg-red-100 hover:text-red-600 font-bold text-xl w-10 h-10 rounded-full flex items-center justify-center shadow-sm transition">✖</button>
+            </div>
+
+            <div class="text-center mb-6 border-b pb-4">
+                <h2 class="text-3xl font-black">طلب توريد</h2>
+                <p id="modalDate" class="text-gray-500 mt-2 font-mono"></p>
+            </div>
             <div class="grid grid-cols-2 gap-4 mb-6 bg-gray-50 p-4 rounded-lg">
                 <div><span class="font-bold">الفرع:</span> <span id="modalBranch" class="text-blue-700 font-bold"></span></div>
                 <div><span class="font-bold">المسؤول:</span> <span id="modalEmp"></span></div>
             </div>
+            
             <table class="w-full text-right border-collapse mb-6">
                 <thead class="bg-gray-200"><tr><th class="p-3 border">المنتج</th><th class="p-3 border">الكمية</th></tr></thead>
                 <tbody id="modalItems"></tbody>
             </table>
-            <div class="text-center no-print mt-8 border-t pt-4"><button onclick="window.print()" class="bg-gray-800 text-white px-8 py-3 rounded-lg font-bold text-lg">🖨️ طباعة</button></div>
+            
+            <div class="text-center no-print mt-8 border-t pt-4">
+                <button onclick="window.print()" class="bg-gray-800 text-white px-8 py-3 rounded-lg font-bold text-lg w-full md:w-auto">🖨️ طباعة الطلب</button>
+            </div>
         </div>
     </div>
 
@@ -315,14 +326,13 @@
             if(tab === 'orders') {
                 renderAdminOrders(); 
             } else if(tab === 'reports') {
-                // جلب قائمة الفروع للتقارير
                 const reportBranchSel = document.getElementById('reportBranch');
-                const prevVal = reportBranchSel.value; // حفظ التحديد الحالي
+                const prevVal = reportBranchSel.value;
                 reportBranchSel.innerHTML = '<option value="all">جميع الفروع</option>';
                 Object.values(globalData.branches).forEach(b => {
                     reportBranchSel.innerHTML += `<option value="${b.name}">${b.name}</option>`;
                 });
-                if(prevVal) reportBranchSel.value = prevVal; // إرجاع التحديد
+                if(prevVal) reportBranchSel.value = prevVal;
                 
                 generateReport(); 
             } else {
