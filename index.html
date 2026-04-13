@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>نظام توريد المطبخ المركزي - النسخة المطورة</title>
+    <title>نظام توريد المطبخ المركزي - النسخة الشاملة</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;900&display=swap');
@@ -12,62 +12,34 @@
         .spinner { border: 3px solid #f3f3f3; border-top: 3px solid #3498db; border-radius: 50%; width: 20px; height: 20px; animation: spin 1s linear infinite; display: inline-block; vertical-align: middle; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         
-        /* إعدادات الطباعة الصارمة لحل مشكلة التداخل في الجوالات */
+        /* إعدادات الطباعة المتقدمة (تكرار العناوين + الطباعة المتعددة) */
         @media print {
             @page { margin: 1cm; }
+            body { background-color: white !important; }
             
-            /* تدمير أي طول ثابت وتصميم مرن يعيق الطباعة */
-            html, body { 
-                height: auto !important; 
-                min-height: auto !important;
-                overflow: visible !important; 
-                display: block !important; 
-                margin: 0 !important; 
-                padding: 0 !important; 
-                background-color: white !important; 
-            }
-            
-            /* إخفاء التطبيق الرئيسي */
             #topBar, #mainApp { display: none !important; }
             
-            /* تحرير النافذة بالكامل من قيود الجوال */
-            #orderModal { 
-                position: static !important; 
-                display: block !important; 
-                background: transparent !important; 
-                padding: 0 !important; 
-                margin: 0 !important;
-                overflow: visible !important;
-            }
+            /* تفعيل حاوية الطباعة المتعددة لو كانت شغالة */
+            body.bulk-printing #orderModal { display: none !important; }
+            body.bulk-printing #bulkPrintContainer { display: block !important; position: static; width: 100%; }
             
-            #printModal { 
-                position: static !important; 
-                display: block !important;
-                width: 100% !important; 
-                max-width: 100% !important; 
-                max-height: none !important; 
-                box-shadow: none !important; 
-                border: none !important;
-                padding: 0 !important; 
-                margin: 0 !important; 
-                overflow: visible !important; 
-                transform: none !important;
-            }
+            /* تفعيل الطباعة الفردية */
+            body:not(.bulk-printing) #orderModal:not(.hidden-view) { position: static !important; display: block !important; background: transparent; padding: 0;}
+            #printModal { position: static !important; width: 100% !important; max-width: none !important; box-shadow: none !important; padding: 0 !important; overflow: visible !important; }
             
             .no-print { display: none !important; }
+            .print-only { display: table-row !important; }
             
-            /* ضبط الجداول بشكل دقيق لمنع التداخل والقص */
-            table { page-break-inside: auto; width: 100% !important; border-collapse: collapse !important; }
-            tr { page-break-inside: avoid !important; page-break-after: auto !important; }
+            /* إجبار المتصفح على تكرار رأس الجدول (معلومات الفرع) في كل صفحة */
             thead { display: table-header-group !important; }
-            td, th { padding: 8px !important; border-bottom: 1px solid #ddd !important; }
+            tr { page-break-inside: avoid; }
         }
 
         .qty-btn { width: 45px; height: 45px; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; font-weight: bold; border-radius: 10px; transition: all 0.2s; user-select: none; }
         .qty-btn:active { transform: scale(0.9); }
     </style>
 </head>
-<body class="text-gray-800 h-screen flex flex-col items-center p-4 overflow-y-auto">
+<body class="text-gray-800 h-screen flex flex-col items-center p-4 overflow-y-auto relative">
 
     <div id="topBar" class="w-full max-w-7xl flex flex-col md:flex-row justify-between items-center mb-6 hidden-view bg-white p-4 rounded-xl shadow-sm border border-gray-200">
         <h2 class="text-xl font-bold text-gray-700">مرحباً، <span id="currentUserDisplay" class="text-blue-600"></span></h2>
@@ -124,11 +96,25 @@
         </div>
 
         <div id="adminView" class="p-8 hidden-view">
+            
             <div id="adminOrdersSection">
-                <h3 class="text-2xl font-bold mb-4">الطلبات الواردة</h3>
+                <div class="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
+                    <h3 class="text-2xl font-bold">الطلبات الواردة</h3>
+                    <button onclick="printSelectedOrders()" class="bg-gray-800 text-white px-6 py-3 rounded-lg font-bold hover:bg-black transition shadow-md w-full md:w-auto">
+                        🖨️ طباعة الطلبات المحددة
+                    </button>
+                </div>
                 <div class="overflow-x-auto rounded-xl border border-gray-200">
                     <table class="w-full text-right border-collapse bg-white hover:cursor-pointer">
-                        <thead class="bg-gray-100 border-b-2"><tr><th class="p-4">رقم الطلب</th><th class="p-4">التاريخ</th><th class="p-4">الفرع</th><th class="p-4">المسؤول</th></tr></thead>
+                        <thead class="bg-gray-100 border-b-2">
+                            <tr>
+                                <th class="p-4 w-12 text-center no-print"><input type="checkbox" id="selectAllOrders" onchange="toggleSelectAll(this)" class="w-5 h-5 cursor-pointer"></th>
+                                <th class="p-4">رقم الطلب</th>
+                                <th class="p-4">التاريخ</th>
+                                <th class="p-4">الفرع</th>
+                                <th class="p-4">المسؤول</th>
+                            </tr>
+                        </thead>
                         <tbody id="ordersTableBody"></tbody>
                     </table>
                 </div>
@@ -195,6 +181,8 @@
         </div>
     </div>
 
+    <div id="bulkPrintContainer" class="hidden print-hidden"></div>
+
     <div id="orderModal" class="fixed inset-0 bg-black bg-opacity-50 hidden-view flex items-center justify-center p-4 z-50">
         <div id="printModal" class="bg-white p-6 md:p-8 rounded-2xl w-full max-w-2xl shadow-2xl relative max-h-[90vh] overflow-y-auto">
             
@@ -202,17 +190,40 @@
                 <button onclick="closeModal()" class="bg-gray-100 text-gray-600 hover:bg-red-100 hover:text-red-600 font-bold text-xl w-10 h-10 rounded-full flex items-center justify-center shadow-sm transition">✖</button>
             </div>
 
-            <div class="text-center mb-6 border-b pb-4">
-                <h2 class="text-3xl font-black">طلب توريد</h2>
-                <p id="modalDate" class="text-gray-500 mt-2 font-mono font-bold text-lg"></p>
-            </div>
-            <div class="grid grid-cols-2 gap-4 mb-6 bg-gray-50 p-4 rounded-lg text-lg">
-                <div><span class="font-bold">الفرع:</span> <span id="modalBranch" class="text-blue-700 font-bold"></span></div>
-                <div><span class="font-bold">المسؤول:</span> <span id="modalEmp"></span></div>
-            </div>
-            
             <table class="w-full text-right border-collapse mb-6">
-                <thead class="bg-gray-200"><tr><th class="p-3 border">المنتج</th><th class="p-3 border">الكمية</th></tr></thead>
+                <thead class="bg-white">
+                    <tr class="no-print">
+                        <td colspan="3">
+                            <div class="text-center mb-6 border-b pb-4">
+                                <h2 class="text-3xl font-black">طلب توريد</h2>
+                                <p id="modalDateStr" class="text-gray-500 mt-2 font-mono font-bold text-lg" dir="ltr"></p>
+                            </div>
+                            <div class="grid grid-cols-2 gap-4 mb-6 bg-gray-50 p-4 rounded-lg text-lg">
+                                <div><span class="font-bold">الفرع:</span> <span id="modalBranchStr" class="text-blue-700 font-bold"></span></div>
+                                <div><span class="font-bold">المسؤول:</span> <span id="modalEmpStr"></span></div>
+                            </div>
+                        </td>
+                    </tr>
+                    
+                    <tr class="hidden print-only border-b-4 border-gray-800">
+                        <td colspan="3" class="pb-4">
+                            <div class="text-center mb-4">
+                                <h2 class="text-3xl font-black">طلب توريد</h2>
+                                <p id="modalDatePrint" class="text-gray-500 mt-2 font-mono font-bold text-lg" dir="ltr"></p>
+                            </div>
+                            <div class="flex justify-between text-lg">
+                                <div><span class="font-bold">الفرع:</span> <span id="modalBranchPrint" class="text-blue-700 font-bold"></span></div>
+                                <div><span class="font-bold">المسؤول:</span> <span id="modalEmpPrint"></span></div>
+                            </div>
+                        </td>
+                    </tr>
+
+                    <tr class="bg-gray-200">
+                        <th class="p-3 border w-12 text-center text-lg">#</th>
+                        <th class="p-3 border text-lg">المنتج</th>
+                        <th class="p-3 border text-center text-lg">الكمية</th>
+                    </tr>
+                </thead>
                 <tbody id="modalItems"></tbody>
             </table>
             
@@ -334,11 +345,8 @@
             if(items.length === 0) return alert("الرجاء تحديد صنف واحد على الأقل.");
             
             const data = {
-                timestamp: new Date().toISOString(), 
-                displayDate: getGregorianDate(), 
-                employee: globalData.currentUsername, 
-                branch: document.getElementById('branchSelect').value, 
-                items: items
+                timestamp: new Date().toISOString(), displayDate: getGregorianDate(), 
+                employee: globalData.currentUsername, branch: document.getElementById('branchSelect').value, items: items
             };
             
             document.getElementById('submitBtn').disabled = true;
@@ -359,8 +367,7 @@
         }
 
         function renderMyOrders() {
-            const tbody = document.getElementById('myOrdersTableBody');
-            tbody.innerHTML = '';
+            const tbody = document.getElementById('myOrdersTableBody'); tbody.innerHTML = '';
             const my = Object.values(globalData.orders).filter(o => o.employee === globalData.currentUsername).reverse();
             my.forEach(o => {
                 let txt = Array.isArray(o.items) ? o.items.map(i => `${i.name}: ${i.qty}`).join(' | ') : "بيانات قديمة";
@@ -368,197 +375,187 @@
             });
         }
 
+        // --- إدارة الإدارة والطلبات ---
         function switchAdminTab(tab) {
             ['orders', 'reports', 'settings'].forEach(t => document.getElementById(`admin${t.charAt(0).toUpperCase() + t.slice(1)}Section`).classList.add('hidden-view'));
             ['orders', 'reports', 'settings'].forEach(t => document.getElementById(`tab${t.charAt(0).toUpperCase() + t.slice(1)}`).className = "px-4 py-2 font-bold bg-gray-200 text-gray-700 rounded-lg whitespace-nowrap");
             document.getElementById(`admin${tab.charAt(0).toUpperCase() + tab.slice(1)}Section`).classList.remove('hidden-view');
             document.getElementById(`tab${tab.charAt(0).toUpperCase() + tab.slice(1)}`).className = "px-4 py-2 font-bold bg-gray-800 text-white rounded-lg whitespace-nowrap";
             
-            if(tab === 'orders') {
-                renderAdminOrders(); 
-            } else if(tab === 'reports') {
-                const reportBranchSel = document.getElementById('reportBranch');
-                const prevVal = reportBranchSel.value;
+            if(tab === 'orders') { renderAdminOrders(); } 
+            else if(tab === 'reports') {
+                const reportBranchSel = document.getElementById('reportBranch'); const prevVal = reportBranchSel.value;
                 reportBranchSel.innerHTML = '<option value="all">جميع الفروع</option>';
-                Object.values(globalData.branches).forEach(b => {
-                    reportBranchSel.innerHTML += `<option value="${b.name}">${b.name}</option>`;
-                });
+                Object.values(globalData.branches).forEach(b => { reportBranchSel.innerHTML += `<option value="${b.name}">${b.name}</option>`; });
                 if(prevVal) reportBranchSel.value = prevVal;
-                
                 generateReport(); 
-            } else {
-                renderSettings();
-            }
+            } else { renderSettings(); }
+        }
+
+        // --- تحديد الكل في جدول الطلبات ---
+        function toggleSelectAll(source) {
+            const checkboxes = document.querySelectorAll('.order-checkbox');
+            checkboxes.forEach(cb => cb.checked = source.checked);
         }
 
         function renderAdminOrders() {
             const tbody = document.getElementById('ordersTableBody'); tbody.innerHTML = '';
+            document.getElementById('selectAllOrders').checked = false; // تصفير زر تحديد الكل
+            
             Object.entries(globalData.orders).reverse().forEach(([id, o]) => {
-                tbody.innerHTML += `<tr class="border-b hover:bg-blue-50" onclick='openModal(${JSON.stringify(o)})'><td class="p-4 font-mono text-gray-500">#${id.slice(-5).toUpperCase()}</td><td class="p-4" dir="ltr">${o.displayDate}</td><td class="p-4 font-bold">${o.branch}</td><td class="p-4">${o.employee}</td></tr>`;
+                const orderDataStr = JSON.stringify(o).replace(/"/g, '&quot;');
+                tbody.innerHTML += `
+                    <tr class="border-b hover:bg-blue-50 cursor-pointer">
+                        <td class="p-4 text-center no-print" onclick="event.stopPropagation();">
+                            <input type="checkbox" class="order-checkbox w-5 h-5 cursor-pointer" value="${orderDataStr}">
+                        </td>
+                        <td class="p-4 font-mono text-gray-500" onclick='openModal(${orderDataStr})'>#${id.slice(-5).toUpperCase()}</td>
+                        <td class="p-4" dir="ltr" onclick='openModal(${orderDataStr})'>${o.displayDate}</td>
+                        <td class="p-4 font-bold" onclick='openModal(${orderDataStr})'>${o.branch}</td>
+                        <td class="p-4" onclick='openModal(${orderDataStr})'>${o.employee}</td>
+                    </tr>`;
             });
         }
 
         function openModal(o) {
-            document.getElementById('modalDate').innerText = o.displayDate;
-            document.getElementById('modalBranch').innerText = o.branch;
-            document.getElementById('modalEmp').innerText = o.employee;
+            document.getElementById('modalDateStr').innerText = o.displayDate;
+            document.getElementById('modalBranchStr').innerText = o.branch;
+            document.getElementById('modalEmpStr').innerText = o.employee;
+            
+            document.getElementById('modalDatePrint').innerText = o.displayDate;
+            document.getElementById('modalBranchPrint').innerText = o.branch;
+            document.getElementById('modalEmpPrint').innerText = o.employee;
+
             const tb = document.getElementById('modalItems'); tb.innerHTML = '';
-            if(Array.isArray(o.items)) o.items.forEach(i => { tb.innerHTML += `<tr><td class="p-3 border font-bold text-lg">${i.name}</td><td class="p-3 border text-2xl font-black">${i.qty}</td></tr>`; });
+            if(Array.isArray(o.items)) {
+                o.items.forEach((i, idx) => { 
+                    tb.innerHTML += `<tr><td class="p-3 border font-bold text-center text-lg w-12">${idx + 1}</td><td class="p-3 border font-bold text-lg">${i.name}</td><td class="p-3 border text-2xl font-black text-center">${i.qty}</td></tr>`; 
+                });
+            }
             document.getElementById('orderModal').classList.remove('hidden-view');
         }
         function closeModal() { document.getElementById('orderModal').classList.add('hidden-view'); }
 
+        // --- نظام الطباعة المتعددة (Bulk Print) ---
+        function printSelectedOrders() {
+            const checkboxes = document.querySelectorAll('.order-checkbox:checked');
+            if (checkboxes.length === 0) return alert('الرجاء تحديد طلب واحد على الأقل للطباعة.');
+            
+            const container = document.getElementById('bulkPrintContainer');
+            container.innerHTML = ''; // تصفير الحاوية
+            
+            checkboxes.forEach((cb, index) => {
+                const o = JSON.parse(cb.value);
+                let itemsHtml = '';
+                
+                if (Array.isArray(o.items)) {
+                    o.items.forEach((i, idx) => {
+                        itemsHtml += `<tr><td class="p-3 border font-bold text-center text-lg w-12">${idx + 1}</td><td class="p-3 border font-bold text-lg">${i.name}</td><td class="p-3 border text-2xl font-black text-center">${i.qty}</td></tr>`;
+                    });
+                }
+
+                // إضافة فاصل صفحات بين الطلبات (إلا آخر طلب)
+                const pageBreakStyle = index < checkboxes.length - 1 ? 'page-break-after: always;' : '';
+                
+                container.innerHTML += `
+                    <div style="${pageBreakStyle} width: 100%;" dir="rtl">
+                        <table class="w-full text-right border-collapse mb-8">
+                            <thead class="bg-white">
+                                <tr class="border-b-4 border-gray-800">
+                                    <td colspan="3" class="pb-4">
+                                        <div class="text-center mb-4">
+                                            <h2 class="text-3xl font-black">طلب توريد</h2>
+                                            <p class="text-gray-500 mt-2 font-mono font-bold text-lg" dir="ltr">${o.displayDate}</p>
+                                        </div>
+                                        <div class="flex justify-between text-lg">
+                                            <div><span class="font-bold">الفرع:</span> <span class="text-blue-700 font-bold">${o.branch}</span></div>
+                                            <div><span class="font-bold">المسؤول:</span> <span>${o.employee}</span></div>
+                                        </div>
+                                    </td>
+                                </tr>
+                                <tr class="bg-gray-200">
+                                    <th class="p-3 border text-center w-12 text-lg">#</th>
+                                    <th class="p-3 border text-lg">المنتج</th>
+                                    <th class="p-3 border text-center text-lg">الكمية</th>
+                                </tr>
+                            </thead>
+                            <tbody>${itemsHtml}</tbody>
+                        </table>
+                    </div>
+                `;
+            });
+
+            // إضافة كلاس الطباعة المتعددة لاستدعاء CSS المناسب وتفعيل الطباعة
+            document.body.classList.add('bulk-printing');
+            window.print();
+            
+            // تنظيف بعد الطباعة
+            setTimeout(() => { document.body.classList.remove('bulk-printing'); container.innerHTML = ''; }, 500);
+        }
+
+        // --- التقارير والإعدادات (مستقرة) ---
         function generateReport() {
-            const start = document.getElementById('filterStart').value; 
-            const end = document.getElementById('filterEnd').value;
-            const branch = document.getElementById('reportBranch').value; 
-            let filtered = Object.values(globalData.orders);
+            const start = document.getElementById('filterStart').value; const end = document.getElementById('filterEnd').value;
+            const branch = document.getElementById('reportBranch').value; let filtered = Object.values(globalData.orders);
             
             if(start) filtered = filtered.filter(o => o.timestamp && o.timestamp.split('T')[0] >= start);
             if(end) filtered = filtered.filter(o => o.timestamp && o.timestamp.split('T')[0] <= end);
             if(branch !== 'all') filtered = filtered.filter(o => o.branch === branch);
             
             let totals = {};
-            filtered.forEach(o => { 
-                if(Array.isArray(o.items)) {
-                    o.items.forEach(i => { totals[i.name] = (totals[i.name] || 0) + parseInt(i.qty); })
-                }
-            });
+            filtered.forEach(o => { if(Array.isArray(o.items)) { o.items.forEach(i => { totals[i.name] = (totals[i.name] || 0) + parseInt(i.qty); }) } });
             
-            const tb = document.getElementById('reportsTableBody'); 
-            tb.innerHTML = '';
+            const tb = document.getElementById('reportsTableBody'); tb.innerHTML = '';
             let sortedTotals = Object.entries(totals).sort((a,b)=>b[1]-a[1]);
-            
             globalData.currentReportData = sortedTotals;
 
-            if(sortedTotals.length === 0) {
-                tb.innerHTML = '<tr><td colspan="2" class="p-8 text-center text-gray-500 font-bold">لا توجد منتجات مباعة في هذا الفرز</td></tr>';
-                return;
-            }
-
-            sortedTotals.forEach(([name, qty]) => {
-                if (qty > 0) {
-                    tb.innerHTML += `<tr class="border-b hover:bg-gray-50"><td class="p-4 font-bold text-lg">${name}</td><td class="p-4 font-black text-blue-600 text-xl">${qty}</td></tr>`;
-                }
-            });
+            if(sortedTotals.length === 0) { tb.innerHTML = '<tr><td colspan="2" class="p-8 text-center text-gray-500 font-bold">لا توجد بيانات</td></tr>'; return; }
+            sortedTotals.forEach(([name, qty]) => { if (qty > 0) tb.innerHTML += `<tr class="border-b hover:bg-gray-50"><td class="p-4 font-bold text-lg">${name}</td><td class="p-4 font-black text-blue-600 text-xl">${qty}</td></tr>`; });
         }
 
         function exportReportCSV() {
-            if(!globalData.currentReportData || globalData.currentReportData.length === 0) {
-                return alert("لا توجد بيانات لتصديرها.");
-            }
-            
+            if(!globalData.currentReportData || globalData.currentReportData.length === 0) return alert("لا توجد بيانات لتصديرها.");
             let branchName = document.getElementById('reportBranch').value === 'all' ? 'جميع_الفروع' : document.getElementById('reportBranch').value;
             let csv = "المنتج,إجمالي الكمية المطلوبة\n";
-            
-            globalData.currentReportData.forEach(([itemName, totalQty]) => {
-                if(totalQty > 0) {
-                    csv += `"${itemName}","${totalQty}"\n`;
-                }
-            });
-            
+            globalData.currentReportData.forEach(([itemName, totalQty]) => { if(totalQty > 0) csv += `"${itemName}","${totalQty}"\n`; });
             const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement("a");
-            const url = URL.createObjectURL(blob);
-            
             const dateStr = new Date().toLocaleDateString('en-GB').replace(/\//g, '-');
-            link.setAttribute("href", url);
-            link.setAttribute("download", `تقرير_${branchName}_${dateStr}.csv`);
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
+            link.setAttribute("href", URL.createObjectURL(blob)); link.setAttribute("download", `تقرير_${branchName}_${dateStr}.csv`);
+            document.body.appendChild(link); link.click(); document.body.removeChild(link);
         }
 
         function renderSettings() {
-            renderList('branches', 'listBranches', b => b.name);
-            renderList('categories', 'listCategories', c => c.name);
-            
+            renderList('branches', 'listBranches', b => b.name); renderList('categories', 'listCategories', c => c.name);
             const catSel = document.getElementById('newProductCategory'); catSel.innerHTML = '';
             Object.entries(globalData.categories).forEach(([id, c]) => { catSel.innerHTML += `<option value="${id}">${c.name}</option>`; });
-            
             const prodUl = document.getElementById('listProducts'); prodUl.innerHTML = '';
             Object.entries(globalData.products).forEach(([id, p]) => {
                 let catName = globalData.categories[p.category] ? globalData.categories[p.category].name : 'غير محدد';
-                prodUl.innerHTML += `<li class="flex flex-col md:flex-row justify-between items-center p-3 bg-white border rounded gap-2">
-                    <span><b>${p.name}</b> <span class="text-xs text-gray-500">(${catName})</span></span>
-                    <div class="flex gap-3">
-                        <button onclick="editProduct('${id}', '${p.name}')" class="text-blue-600 font-bold hover:underline">✏️ تعديل</button>
-                        <button onclick="secureDelete('settings/products/${id}')" class="text-red-600 font-bold hover:underline">🗑️ حذف</button>
-                    </div>
-                </li>`;
+                prodUl.innerHTML += `<li class="flex flex-col md:flex-row justify-between items-center p-3 bg-white border rounded gap-2"><span><b>${p.name}</b> <span class="text-xs text-gray-500">(${catName})</span></span><div class="flex gap-3"><button onclick="editProduct('${id}', '${p.name}')" class="text-blue-600 font-bold hover:underline">✏️ تعديل</button><button onclick="secureDelete('settings/products/${id}')" class="text-red-600 font-bold hover:underline">🗑️ حذف</button></div></li>`;
             });
-            
             const userUl = document.getElementById('listUsers'); userUl.innerHTML = '';
             Object.entries(globalData.users).forEach(([code, u]) => {
-                userUl.innerHTML += `<li class="flex flex-col md:flex-row justify-between items-center p-3 bg-white border rounded gap-2">
-                    <span><b>${u.name}</b> <span class="text-xs text-blue-500" dir="ltr">[${code}]</span></span>
-                    <div class="flex gap-3">
-                        <button onclick="editUser('${code}', '${u.name}')" class="text-blue-600 font-bold hover:underline">✏️ تعديل</button>
-                        <button onclick="secureDelete('users/${code}')" class="text-red-600 font-bold hover:underline">🗑️ حذف</button>
-                    </div>
-                </li>`;
+                userUl.innerHTML += `<li class="flex flex-col md:flex-row justify-between items-center p-3 bg-white border rounded gap-2"><span><b>${u.name}</b> <span class="text-xs text-blue-500" dir="ltr">[${code}]</span></span><div class="flex gap-3"><button onclick="editUser('${code}', '${u.name}')" class="text-blue-600 font-bold hover:underline">✏️ تعديل</button><button onclick="secureDelete('users/${code}')" class="text-red-600 font-bold hover:underline">🗑️ حذف</button></div></li>`;
             });
         }
 
         function renderList(key, elId, display) {
             const ul = document.getElementById(elId); ul.innerHTML = '';
             Object.entries(globalData[key]).forEach(([id, item]) => {
-                ul.innerHTML += `<li class="flex flex-col md:flex-row justify-between items-center p-3 bg-white border rounded gap-2">
-                    <span>${display(item)}</span>
-                    <div class="flex gap-3">
-                        <button onclick="editSetting('${key}', '${id}', '${item.name}')" class="text-blue-600 font-bold hover:underline">✏️ تعديل</button>
-                        <button onclick="secureDelete('settings/${key}/${id}')" class="text-red-600 font-bold hover:underline">🗑️ حذف</button>
-                    </div>
-                </li>`;
+                ul.innerHTML += `<li class="flex flex-col md:flex-row justify-between items-center p-3 bg-white border rounded gap-2"><span>${display(item)}</span><div class="flex gap-3"><button onclick="editSetting('${key}', '${id}', '${item.name}')" class="text-blue-600 font-bold hover:underline">✏️ تعديل</button><button onclick="secureDelete('settings/${key}/${id}')" class="text-red-600 font-bold hover:underline">🗑️ حذف</button></div></li>`;
             });
         }
 
-        async function addSetting(path, inputId) {
-            const val = document.getElementById(inputId).value.trim(); if(!val) return;
-            await postDB(`settings/${path}`, { name: val }); document.getElementById(inputId).value = ''; await initData(); renderSettings();
-        }
-        async function addUser() {
-            const n = document.getElementById('newUserName').value.trim(); const c = document.getElementById('newUserCode').value.trim();
-            if(!n || !c) return; await putDB(`users/${c}`, { name: n }); 
-            document.getElementById('newUserName').value = ''; document.getElementById('newUserCode').value = ''; await initData(); renderSettings();
-        }
-        async function addProduct() {
-            const n = document.getElementById('newProductName').value.trim(); const c = document.getElementById('newProductCategory').value;
-            if(!n || !c) return; await postDB(`settings/products`, { name: n, category: c }); 
-            document.getElementById('newProductName').value = ''; await initData(); renderSettings();
-        }
+        async function addSetting(path, inputId) { const val = document.getElementById(inputId).value.trim(); if(!val) return; await postDB(`settings/${path}`, { name: val }); document.getElementById(inputId).value = ''; await initData(); renderSettings(); }
+        async function addUser() { const n = document.getElementById('newUserName').value.trim(); const c = document.getElementById('newUserCode').value.trim(); if(!n || !c) return; await putDB(`users/${c}`, { name: n }); document.getElementById('newUserName').value = ''; document.getElementById('newUserCode').value = ''; await initData(); renderSettings(); }
+        async function addProduct() { const n = document.getElementById('newProductName').value.trim(); const c = document.getElementById('newProductCategory').value; if(!n || !c) return; await postDB(`settings/products`, { name: n, category: c }); document.getElementById('newProductName').value = ''; await initData(); renderSettings(); }
 
-        async function editSetting(key, id, oldName) {
-            let newName = prompt("أدخل الاسم الجديد:", oldName);
-            if (newName && newName.trim() !== "" && newName !== oldName) {
-                await updateDB(`settings/${key}/${id}`, { name: newName.trim() });
-                await initData(); renderSettings();
-            }
-        }
-        async function editProduct(id, oldName) {
-            let newName = prompt("أدخل الاسم الجديد للمنتج:", oldName);
-            if (newName && newName.trim() !== "" && newName !== oldName) {
-                await updateDB(`settings/products/${id}`, { name: newName.trim() });
-                await initData(); renderSettings();
-            }
-        }
-        async function editUser(code, oldName) {
-            let newName = prompt("أدخل الاسم الجديد للمستخدم:", oldName);
-            if (newName && newName.trim() !== "" && newName !== oldName) {
-                await updateDB(`users/${code}`, { name: newName.trim() });
-                await initData(); renderSettings();
-            }
-        }
+        async function editSetting(key, id, oldName) { let newName = prompt("أدخل الاسم الجديد:", oldName); if (newName && newName.trim() !== "" && newName !== oldName) { await updateDB(`settings/${key}/${id}`, { name: newName.trim() }); await initData(); renderSettings(); } }
+        async function editProduct(id, oldName) { let newName = prompt("أدخل الاسم الجديد للمنتج:", oldName); if (newName && newName.trim() !== "" && newName !== oldName) { await updateDB(`settings/products/${id}`, { name: newName.trim() }); await initData(); renderSettings(); } }
+        async function editUser(code, oldName) { let newName = prompt("أدخل الاسم الجديد للمستخدم:", oldName); if (newName && newName.trim() !== "" && newName !== oldName) { await updateDB(`users/${code}`, { name: newName.trim() }); await initData(); renderSettings(); } }
 
-        async function secureDelete(path) {
-            let pass = prompt("لإتمام الحذف، الرجاء إدخال الرمز السري للحذف:");
-            if (pass === DELETE_PIN) {
-                await deleteDB(path);
-                await initData(); renderSettings();
-            } else if (pass !== null) {
-                alert("❌ الرمز السري غير صحيح. تم إلغاء عملية الحذف.");
-            }
-        }
+        async function secureDelete(path) { let pass = prompt("لإتمام الحذف، الرجاء إدخال الرمز السري للحذف:"); if (pass === DELETE_PIN) { await deleteDB(path); await initData(); renderSettings(); } else if (pass !== null) { alert("❌ الرمز السري غير صحيح. تم إلغاء عملية الحذف."); } }
     </script>
 </body>
 </html>
