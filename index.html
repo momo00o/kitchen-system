@@ -12,64 +12,33 @@
         .spinner { border: 3px solid #f3f3f3; border-top: 3px solid #3498db; border-radius: 50%; width: 20px; height: 20px; animation: spin 1s linear infinite; display: inline-block; vertical-align: middle; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         
-        /* إعدادات الطباعة الإجبارية (الضربة القاضية لمشكلة الصفحات البيضاء)
-           هذا الكود يدمر قيود شاشة الجوال ويحول الطلب إلى ورقة طباعة مفتوحة الطول
-        */
+        /* إعدادات الطباعة المباشرة والمضمونة لجميع الأجهزة */
         @media print {
-            @page { margin: 10mm; }
+            @page { margin: 1cm; }
+            body { background-color: white !important; }
             
-            /* إجبار المتصفح على عرض الصفحة بالكامل وعدم قصها */
-            html, body { 
-                display: block !important; 
-                width: auto !important;
-                height: auto !important; 
-                min-height: 100% !important;
-                overflow: visible !important; 
-                position: static !important; 
-                margin: 0 !important; 
-                padding: 0 !important; 
-                background-color: white !important; 
-            }
+            /* إخفاء الواجهة الأساسية وأزرار الطباعة */
+            #topBar, #mainApp, .no-print { display: none !important; }
             
-            /* إخفاء التطبيق الرئيسي بالكامل وقت الطباعة */
-            #topBar, #mainApp, .no-print { 
-                display: none !important; 
-            }
-            
-            /* تحرير حاوية الطباعة الفردية والمتعددة من وضع النافذة (Modal/Fixed) */
+            /* تحرير حاوية الطباعة من أي قيود */
             #bulkPrintContainer, #orderModal { 
-                display: block !important; 
                 position: static !important; 
-                width: 100% !important; 
-                height: auto !important; 
-                max-height: none !important; 
-                overflow: visible !important; 
-                padding: 0 !important; 
-                margin: 0 !important; 
-                background: white !important; 
-                transform: none !important;
-                inset: auto !important;
-            }
-
-            #printModal { 
                 display: block !important; 
-                position: static !important; 
                 width: 100% !important; 
-                max-width: 100% !important; 
-                height: auto !important; 
-                max-height: none !important; 
-                overflow: visible !important; 
+                max-width: none !important; 
                 box-shadow: none !important; 
-                border: none !important; 
                 padding: 0 !important; 
                 margin: 0 !important; 
+                overflow: visible !important; 
+                background: white !important;
             }
             
-            /* حماية الجداول من القص في نص المنتج */
-            table { page-break-inside: auto !important; width: 100% !important; border-collapse: collapse !important; }
+            #printModal { box-shadow: none !important; padding: 0 !important; }
+            
+            /* حماية الجداول من القص */
+            table { page-break-inside: auto; width: 100% !important; border-collapse: collapse !important; }
             tr { page-break-inside: avoid !important; page-break-after: auto !important; }
             thead { display: table-header-group !important; }
-            td, th { break-inside: avoid !important; border: 1px solid #ddd !important; } /* إضافة حدود خفيفة لتوضيح الجدول في الورق */
         }
 
         .qty-btn { width: 45px; height: 45px; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; font-weight: bold; border-radius: 10px; transition: all 0.2s; user-select: none; }
@@ -218,7 +187,7 @@
         </div>
     </div>
 
-    <div id="bulkPrintContainer" class="hidden-view w-full max-w-4xl mx-auto bg-white text-black p-4 md:p-8 rounded-xl mb-10 border border-gray-200">
+    <div id="bulkPrintContainer" class="hidden-view w-full max-w-4xl mx-auto bg-white text-black p-4 md:p-8 rounded-xl shadow-2xl mb-10 border border-gray-200">
         </div>
 
     <div id="orderModal" class="fixed inset-0 bg-black bg-opacity-50 hidden-view flex items-center justify-center p-4 z-50">
@@ -414,6 +383,7 @@
             });
         }
 
+        // --- إدارة الإدارة والطلبات ---
         function switchAdminTab(tab) {
             ['orders', 'reports', 'settings'].forEach(t => document.getElementById(`admin${t.charAt(0).toUpperCase() + t.slice(1)}Section`).classList.add('hidden-view'));
             ['orders', 'reports', 'settings'].forEach(t => document.getElementById(`tab${t.charAt(0).toUpperCase() + t.slice(1)}`).className = "px-4 py-2 font-bold bg-gray-200 text-gray-700 rounded-lg whitespace-nowrap");
@@ -454,7 +424,6 @@
             });
         }
 
-        // دالة الطباعة الفردية
         function openModal(o) {
             document.getElementById('modalDateStr').innerText = o.displayDate;
             document.getElementById('modalBranchStr').innerText = o.branch;
@@ -474,7 +443,7 @@
         }
         function closeModal() { document.getElementById('orderModal').classList.add('hidden-view'); }
 
-        // --- نظام المعاينة والطباعة المتعددة المضمون 100% للموبايل ---
+        // --- نظام المعاينة والطباعة المتعددة الجديد ---
         function previewSelectedOrders() {
             const checkboxes = document.querySelectorAll('.order-checkbox:checked');
             if (checkboxes.length === 0) return alert('الرجاء تحديد طلب واحد على الأقل للمعاينة.');
@@ -502,20 +471,8 @@
                     <div style="${pageBreakStyle} width: 100%; margin-bottom: 3rem;" dir="rtl">
                         <table class="w-full text-right border-collapse mb-8 bg-white shadow-sm border border-gray-100">
                             <thead class="bg-white">
-                                <tr class="border-b-4 border-gray-800 no-print">
+                                <tr class="border-b-4 border-gray-800">
                                     <td colspan="3" class="p-6">
-                                        <div class="text-center mb-4">
-                                            <h2 class="text-3xl font-black">طلب توريد</h2>
-                                            <p class="text-gray-500 mt-2 font-mono font-bold text-lg" dir="ltr">${o.displayDate}</p>
-                                        </div>
-                                        <div class="flex justify-between text-lg">
-                                            <div><span class="font-bold">الفرع:</span> <span class="text-blue-700 font-bold">${o.branch}</span></div>
-                                            <div><span class="font-bold">المسؤول:</span> <span>${o.employee}</span></div>
-                                        </div>
-                                    </td>
-                                </tr>
-                                <tr class="hidden print-only border-b-4 border-gray-800">
-                                    <td colspan="3" class="pb-4">
                                         <div class="text-center mb-4">
                                             <h2 class="text-3xl font-black">طلب توريد</h2>
                                             <p class="text-gray-500 mt-2 font-mono font-bold text-lg" dir="ltr">${o.displayDate}</p>
@@ -538,7 +495,7 @@
                 `;
             });
 
-            // أزرار التحكم في أسفل صفحة المعاينة (تختفي وقت الطباعة)
+            // أزرار التحكم في أسفل صفحة المعاينة
             const actionButtons = `
                 <div class="flex flex-col md:flex-row justify-center gap-4 mt-10 no-print border-t-2 pt-6">
                     <button onclick="window.print()" class="bg-gray-800 text-white px-10 py-4 rounded-xl font-bold text-xl hover:bg-black transition shadow-lg w-full md:w-auto">🖨️ طباعة الطلبات المعروضة</button>
@@ -548,13 +505,14 @@
 
             container.innerHTML = htmlContent + actionButtons;
 
-            // إخفاء التطبيق وإظهار صفحة المعاينة الثابتة (يحل مشكلة شاشات الجوال)
+            // التبديل بين الواجهات
             mainApp.classList.add('hidden-view');
             topBar.classList.add('hidden-view');
             container.classList.remove('hidden-view');
-            window.scrollTo(0, 0);
+            window.scrollTo(0, 0); // رفع الشاشة للأعلى
         }
 
+        // دالة الرجوع من صفحة المعاينة
         function cancelBulkPrint() {
             const container = document.getElementById('bulkPrintContainer');
             container.classList.add('hidden-view');
