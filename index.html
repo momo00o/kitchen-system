@@ -12,16 +12,12 @@
         .spinner { border: 3px solid #f3f3f3; border-top: 3px solid #3498db; border-radius: 50%; width: 20px; height: 20px; animation: spin 1s linear infinite; display: inline-block; vertical-align: middle; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         
-        /* إعدادات الطباعة المتقدمة (تكرار العناوين + الطباعة المتعددة) */
+        /* إعدادات الطباعة المتقدمة */
         @media print {
             @page { margin: 1cm; }
             body { background-color: white !important; }
             
             #topBar, #mainApp { display: none !important; }
-            
-            /* تفعيل حاوية الطباعة المتعددة لو كانت شغالة */
-            body.bulk-printing #orderModal { display: none !important; }
-            body.bulk-printing #bulkPrintContainer { display: block !important; position: static; width: 100%; }
             
             /* تفعيل الطباعة الفردية */
             body:not(.bulk-printing) #orderModal:not(.hidden-view) { position: static !important; display: block !important; background: transparent; padding: 0;}
@@ -30,7 +26,6 @@
             .no-print { display: none !important; }
             .print-only { display: table-row !important; }
             
-            /* إجبار المتصفح على تكرار رأس الجدول (معلومات الفرع) في كل صفحة */
             thead { display: table-header-group !important; }
             tr { page-break-inside: avoid; }
         }
@@ -181,7 +176,7 @@
         </div>
     </div>
 
-    <div id="bulkPrintContainer" class="hidden print-hidden"></div>
+    <div id="bulkPrintContainer" class="hidden-view w-full bg-white text-black p-4"></div>
 
     <div id="orderModal" class="fixed inset-0 bg-black bg-opacity-50 hidden-view flex items-center justify-center p-4 z-50">
         <div id="printModal" class="bg-white p-6 md:p-8 rounded-2xl w-full max-w-2xl shadow-2xl relative max-h-[90vh] overflow-y-auto">
@@ -375,7 +370,6 @@
             });
         }
 
-        // --- إدارة الإدارة والطلبات ---
         function switchAdminTab(tab) {
             ['orders', 'reports', 'settings'].forEach(t => document.getElementById(`admin${t.charAt(0).toUpperCase() + t.slice(1)}Section`).classList.add('hidden-view'));
             ['orders', 'reports', 'settings'].forEach(t => document.getElementById(`tab${t.charAt(0).toUpperCase() + t.slice(1)}`).className = "px-4 py-2 font-bold bg-gray-200 text-gray-700 rounded-lg whitespace-nowrap");
@@ -392,7 +386,6 @@
             } else { renderSettings(); }
         }
 
-        // --- تحديد الكل في جدول الطلبات ---
         function toggleSelectAll(source) {
             const checkboxes = document.querySelectorAll('.order-checkbox');
             checkboxes.forEach(cb => cb.checked = source.checked);
@@ -400,7 +393,7 @@
 
         function renderAdminOrders() {
             const tbody = document.getElementById('ordersTableBody'); tbody.innerHTML = '';
-            document.getElementById('selectAllOrders').checked = false; // تصفير زر تحديد الكل
+            document.getElementById('selectAllOrders').checked = false;
             
             Object.entries(globalData.orders).reverse().forEach(([id, o]) => {
                 const orderDataStr = JSON.stringify(o).replace(/"/g, '&quot;');
@@ -436,13 +429,16 @@
         }
         function closeModal() { document.getElementById('orderModal').classList.add('hidden-view'); }
 
-        // --- نظام الطباعة المتعددة (Bulk Print) ---
+        // --- الطباعة المتعددة المخصصة للتابلت ---
         function printSelectedOrders() {
             const checkboxes = document.querySelectorAll('.order-checkbox:checked');
             if (checkboxes.length === 0) return alert('الرجاء تحديد طلب واحد على الأقل للطباعة.');
             
             const container = document.getElementById('bulkPrintContainer');
-            container.innerHTML = ''; // تصفير الحاوية
+            const mainApp = document.getElementById('mainApp');
+            const topBar = document.getElementById('topBar');
+            
+            container.innerHTML = ''; 
             
             checkboxes.forEach((cb, index) => {
                 const o = JSON.parse(cb.value);
@@ -454,8 +450,8 @@
                     });
                 }
 
-                // إضافة فاصل صفحات بين الطلبات (إلا آخر طلب)
-                const pageBreakStyle = index < checkboxes.length - 1 ? 'page-break-after: always;' : '';
+                // فاصل صفحات بين الطلبات
+                const pageBreakStyle = index < checkboxes.length - 1 ? 'page-break-after: always; break-after: page;' : '';
                 
                 container.innerHTML += `
                     <div style="${pageBreakStyle} width: 100%;" dir="rtl">
@@ -485,15 +481,27 @@
                 `;
             });
 
-            // إضافة كلاس الطباعة المتعددة لاستدعاء CSS المناسب وتفعيل الطباعة
-            document.body.classList.add('bulk-printing');
-            window.print();
-            
-            // تنظيف بعد الطباعة
-            setTimeout(() => { document.body.classList.remove('bulk-printing'); container.innerHTML = ''; }, 500);
+            // إخفاء الواجهة وإظهار الطلبات (طريقة تحل مشكلة التابلت السامسونج)
+            mainApp.classList.add('hidden-view');
+            topBar.classList.add('hidden-view');
+            container.classList.remove('hidden-view');
+
+            // تأخير متعمد للسماح للمتصفح بالتحميل قبل أخذ لقطة الطباعة
+            setTimeout(() => {
+                window.print();
+                
+                // إعادة الواجهة لطبيعتها بعد اكتمال الطباعة
+                setTimeout(() => {
+                    mainApp.classList.remove('hidden-view');
+                    topBar.classList.remove('hidden-view');
+                    container.classList.add('hidden-view');
+                    container.innerHTML = '';
+                    document.querySelectorAll('.order-checkbox').forEach(cb => cb.checked = false);
+                    document.getElementById('selectAllOrders').checked = false;
+                }, 1000);
+            }, 500);
         }
 
-        // --- التقارير والإعدادات (مستقرة) ---
         function generateReport() {
             const start = document.getElementById('filterStart').value; const end = document.getElementById('filterEnd').value;
             const branch = document.getElementById('reportBranch').value; let filtered = Object.values(globalData.orders);
