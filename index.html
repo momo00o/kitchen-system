@@ -12,38 +12,55 @@
         .spinner { border: 3px solid #f3f3f3; border-top: 3px solid #3498db; border-radius: 50%; width: 20px; height: 20px; animation: spin 1s linear infinite; display: inline-block; vertical-align: middle; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         
-        /* إعدادات الطباعة الجديدة (تمنع اختفاء العناوين والتواريخ) */
+        /* إعدادات الطباعة الصارمة لحل مشكلة التداخل في الجوالات */
         @media print {
-            @page { margin: 1cm; } /* هوامش ورقة الـ A4 */
-            body { background-color: white !important; }
+            @page { margin: 1cm; }
             
-            /* إخفاء التطبيق الرئيسي بالكامل وقت الطباعة */
+            /* تدمير أي طول ثابت وتصميم مرن يعيق الطباعة */
+            html, body { 
+                height: auto !important; 
+                min-height: auto !important;
+                overflow: visible !important; 
+                display: block !important; 
+                margin: 0 !important; 
+                padding: 0 !important; 
+                background-color: white !important; 
+            }
+            
+            /* إخفاء التطبيق الرئيسي */
             #topBar, #mainApp { display: none !important; }
             
-            /* تحويل نافذة الطباعة إلى مستند أساسي */
+            /* تحرير النافذة بالكامل من قيود الجوال */
             #orderModal { 
                 position: static !important; 
                 display: block !important; 
                 background: transparent !important; 
                 padding: 0 !important; 
+                margin: 0 !important;
+                overflow: visible !important;
             }
+            
             #printModal { 
                 position: static !important; 
+                display: block !important;
                 width: 100% !important; 
                 max-width: 100% !important; 
+                max-height: none !important; 
                 box-shadow: none !important; 
+                border: none !important;
                 padding: 0 !important; 
                 margin: 0 !important; 
-                max-height: none !important; 
                 overflow: visible !important; 
+                transform: none !important;
             }
             
-            /* إخفاء أي أزرار لا نحتاجها في الطباعة */
             .no-print { display: none !important; }
             
-            /* منع قص المنتجات بين الصفحات */
-            tr { page-break-inside: avoid; }
-            thead { display: table-header-group; }
+            /* ضبط الجداول بشكل دقيق لمنع التداخل والقص */
+            table { page-break-inside: auto; width: 100% !important; border-collapse: collapse !important; }
+            tr { page-break-inside: avoid !important; page-break-after: auto !important; }
+            thead { display: table-header-group !important; }
+            td, th { padding: 8px !important; border-bottom: 1px solid #ddd !important; }
         }
 
         .qty-btn { width: 45px; height: 45px; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; font-weight: bold; border-radius: 10px; transition: all 0.2s; user-select: none; }
@@ -218,9 +235,7 @@
         async function updateDB(path, data) { await fetch(`${DB_BASE}/${path}.json`, { method: 'PATCH', body: JSON.stringify(data) }); }
         async function deleteDB(path) { await fetch(`${DB_BASE}/${path}.json`, { method: 'DELETE' }); }
 
-        // دالة توليد التاريخ الميلادي الموحد للجميع
         function getGregorianDate() {
-            // باستخدام en-GB يعطينا التاريخ ميلادي صريح DD/MM/YYYY مهما كان تقويم الجوال
             return new Date().toLocaleString('en-GB', { hour12: true });
         }
 
@@ -320,7 +335,7 @@
             
             const data = {
                 timestamp: new Date().toISOString(), 
-                displayDate: getGregorianDate(), // تم تطبيق التاريخ الميلادي الإجباري
+                displayDate: getGregorianDate(), 
                 employee: globalData.currentUsername, 
                 branch: document.getElementById('branchSelect').value, 
                 items: items
@@ -414,7 +429,7 @@
             tb.innerHTML = '';
             let sortedTotals = Object.entries(totals).sort((a,b)=>b[1]-a[1]);
             
-            globalData.currentReportData = sortedTotals; // حفظ للتصدير
+            globalData.currentReportData = sortedTotals;
 
             if(sortedTotals.length === 0) {
                 tb.innerHTML = '<tr><td colspan="2" class="p-8 text-center text-gray-500 font-bold">لا توجد منتجات مباعة في هذا الفرز</td></tr>';
@@ -428,7 +443,6 @@
             });
         }
 
-        // دالة تصدير CSV تدعم اللغة العربية
         function exportReportCSV() {
             if(!globalData.currentReportData || globalData.currentReportData.length === 0) {
                 return alert("لا توجد بيانات لتصديرها.");
