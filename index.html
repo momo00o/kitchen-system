@@ -246,6 +246,7 @@
         const DELETE_PIN = "513795";
         
         let globalData = { orders: {}, users: {}, branches: {}, categories: {}, products: {}, currentUsername: "", currentReportData: [] };
+        let currentOrdersLimit = 50; // حد الطلبات المعروضة لتسريع الأداء
 
         async function fetchDB(path) { try { let res = await fetch(`${DB_BASE}/${path}.json`); return await res.json() || {}; } catch (e) { return {}; } }
         async function putDB(path, data) { await fetch(`${DB_BASE}/${path}.json`, { method: 'PUT', body: JSON.stringify(data) }); }
@@ -307,20 +308,20 @@
             Object.values(globalData.branches).forEach(b => { branchSel.innerHTML += `<option value="${b.name}">${b.name}</option>`; });
 
             const area = document.getElementById('dynamicProductsArea');
-            area.innerHTML = '';
+            let htmlStr = '';
             
             Object.keys(globalData.categories).forEach(catId => {
                 const catName = globalData.categories[catId].name;
                 const prods = Object.values(globalData.products).filter(p => p.category === catId);
                 
                 if(prods.length > 0) {
-                    let html = `<div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                    htmlStr += `<div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
                                 <h3 class="bg-gray-800 text-white p-4 font-black text-lg">${catName}</h3>
                                 <div class="divide-y divide-gray-100">`;
                     
                     prods.forEach(p => {
                         const inputId = `input_${p.name.replace(/\s+/g, '_')}`;
-                        html += `
+                        htmlStr += `
                             <div class="p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-gray-50 transition">
                                 <span class="text-lg font-bold text-gray-700">${p.name}</span>
                                 <div class="flex items-center gap-3">
@@ -331,10 +332,10 @@
                                 </div>
                             </div>`;
                     });
-                    html += `</div></div>`;
-                    area.innerHTML += html;
+                    htmlStr += `</div></div>`;
                 }
             });
+            area.innerHTML = htmlStr;
         }
 
         function changeQty(id, delta) {
@@ -375,12 +376,14 @@
         }
 
         function renderMyOrders() {
-            const tbody = document.getElementById('myOrdersTableBody'); tbody.innerHTML = '';
+            const tbody = document.getElementById('myOrdersTableBody'); 
+            let htmlStr = '';
             const my = Object.values(globalData.orders).filter(o => o.employee === globalData.currentUsername).reverse();
             my.forEach(o => {
                 let txt = Array.isArray(o.items) ? o.items.map(i => `${i.name}: ${i.qty}`).join(' | ') : "بيانات قديمة";
-                tbody.innerHTML += `<tr class="border-b"><td class="p-4 font-mono text-sm" dir="ltr">${o.displayDate}</td><td class="p-4 font-bold">${o.branch}</td><td class="p-4 text-sm">${txt}</td></tr>`;
+                htmlStr += `<tr class="border-b"><td class="p-4 font-mono text-sm" dir="ltr">${o.displayDate}</td><td class="p-4 font-bold">${o.branch}</td><td class="p-4 text-sm">${txt}</td></tr>`;
             });
+            tbody.innerHTML = htmlStr;
         }
 
         // --- إدارة الإدارة والطلبات ---
@@ -390,7 +393,10 @@
             document.getElementById(`admin${tab.charAt(0).toUpperCase() + tab.slice(1)}Section`).classList.remove('hidden-view');
             document.getElementById(`tab${tab.charAt(0).toUpperCase() + tab.slice(1)}`).className = "px-4 py-2 font-bold bg-gray-800 text-white rounded-lg whitespace-nowrap";
             
-            if(tab === 'orders') { renderAdminOrders(); } 
+            if(tab === 'orders') { 
+                currentOrdersLimit = 50; // إعادة التعيين عند فتح التبويب
+                renderAdminOrders(); 
+            } 
             else if(tab === 'reports') {
                 const reportBranchSel = document.getElementById('reportBranch'); const prevVal = reportBranchSel.value;
                 reportBranchSel.innerHTML = '<option value="all">جميع الفروع</option>';
@@ -406,12 +412,16 @@
         }
 
         function renderAdminOrders() {
-            const tbody = document.getElementById('ordersTableBody'); tbody.innerHTML = '';
+            const tbody = document.getElementById('ordersTableBody');
             document.getElementById('selectAllOrders').checked = false;
             
-            Object.entries(globalData.orders).reverse().forEach(([id, o]) => {
+            const allOrders = Object.entries(globalData.orders).reverse();
+            const displayOrders = allOrders.slice(0, currentOrdersLimit);
+            
+            let htmlStr = '';
+            displayOrders.forEach(([id, o]) => {
                 const orderDataStr = JSON.stringify(o).replace(/"/g, '&quot;');
-                tbody.innerHTML += `
+                htmlStr += `
                     <tr class="border-b hover:bg-blue-50 cursor-pointer">
                         <td class="p-4 text-center no-print" onclick="event.stopPropagation();">
                             <input type="checkbox" class="order-checkbox w-5 h-5 cursor-pointer" value="${orderDataStr}">
@@ -422,6 +432,25 @@
                         <td class="p-4" onclick='openModal(${orderDataStr})'>${o.employee}</td>
                     </tr>`;
             });
+
+            if (allOrders.length > currentOrdersLimit) {
+                htmlStr += `
+                    <tr class="no-print border-none">
+                        <td colspan="5" class="p-6 text-center">
+                            <button onclick="loadMoreOrders()" class="bg-gray-200 text-gray-800 px-6 py-3 rounded-xl font-bold hover:bg-gray-300 transition shadow-sm border border-gray-300">
+                                ⬇️ تحميل المزيد من الطلبات الأقدم
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            }
+
+            tbody.innerHTML = htmlStr;
+        }
+
+        function loadMoreOrders() {
+            currentOrdersLimit += 50;
+            renderAdminOrders();
         }
 
         function openModal(o) {
@@ -433,17 +462,20 @@
             document.getElementById('modalBranchPrint').innerText = o.branch;
             document.getElementById('modalEmpPrint').innerText = o.employee;
 
-            const tb = document.getElementById('modalItems'); tb.innerHTML = '';
+            const tb = document.getElementById('modalItems'); 
+            let htmlStr = '';
             if(Array.isArray(o.items)) {
                 o.items.forEach((i, idx) => { 
-                    tb.innerHTML += `<tr><td class="p-3 border font-bold text-center text-lg w-12">${idx + 1}</td><td class="p-3 border font-bold text-lg">${i.name}</td><td class="p-3 border text-2xl font-black text-center">${i.qty}</td></tr>`; 
+                    htmlStr += `<tr><td class="p-3 border font-bold text-center text-lg w-12">${idx + 1}</td><td class="p-3 border font-bold text-lg">${i.name}</td><td class="p-3 border text-2xl font-black text-center">${i.qty}</td></tr>`; 
                 });
             }
+            tb.innerHTML = htmlStr;
             document.getElementById('orderModal').classList.remove('hidden-view');
         }
+        
         function closeModal() { document.getElementById('orderModal').classList.add('hidden-view'); }
 
-        // --- نظام المعاينة والطباعة المتعددة الجديد ---
+        // --- نظام المعاينة والطباعة المتعددة ---
         function previewSelectedOrders() {
             const checkboxes = document.querySelectorAll('.order-checkbox:checked');
             if (checkboxes.length === 0) return alert('الرجاء تحديد طلب واحد على الأقل للمعاينة.');
@@ -464,7 +496,6 @@
                     });
                 }
 
-                // فاصل صفحات في الطباعة فقط
                 const pageBreakStyle = index < checkboxes.length - 1 ? 'page-break-after: always; break-after: page;' : '';
                 
                 htmlContent += `
@@ -495,7 +526,6 @@
                 `;
             });
 
-            // أزرار التحكم في أسفل صفحة المعاينة
             const actionButtons = `
                 <div class="flex flex-col md:flex-row justify-center gap-4 mt-10 no-print border-t-2 pt-6">
                     <button onclick="window.print()" class="bg-gray-800 text-white px-10 py-4 rounded-xl font-bold text-xl hover:bg-black transition shadow-lg w-full md:w-auto">🖨️ طباعة الطلبات المعروضة</button>
@@ -505,14 +535,12 @@
 
             container.innerHTML = htmlContent + actionButtons;
 
-            // التبديل بين الواجهات
             mainApp.classList.add('hidden-view');
             topBar.classList.add('hidden-view');
             container.classList.remove('hidden-view');
-            window.scrollTo(0, 0); // رفع الشاشة للأعلى
+            window.scrollTo(0, 0);
         }
 
-        // دالة الرجوع من صفحة المعاينة
         function cancelBulkPrint() {
             const container = document.getElementById('bulkPrintContainer');
             container.classList.add('hidden-view');
@@ -533,12 +561,20 @@
             let totals = {};
             filtered.forEach(o => { if(Array.isArray(o.items)) { o.items.forEach(i => { totals[i.name] = (totals[i.name] || 0) + parseInt(i.qty); }) } });
             
-            const tb = document.getElementById('reportsTableBody'); tb.innerHTML = '';
+            const tb = document.getElementById('reportsTableBody'); 
+            let htmlStr = '';
             let sortedTotals = Object.entries(totals).sort((a,b)=>b[1]-a[1]);
             globalData.currentReportData = sortedTotals;
 
-            if(sortedTotals.length === 0) { tb.innerHTML = '<tr><td colspan="2" class="p-8 text-center text-gray-500 font-bold">لا توجد بيانات</td></tr>'; return; }
-            sortedTotals.forEach(([name, qty]) => { if (qty > 0) tb.innerHTML += `<tr class="border-b hover:bg-gray-50"><td class="p-4 font-bold text-lg">${name}</td><td class="p-4 font-black text-blue-600 text-xl">${qty}</td></tr>`; });
+            if(sortedTotals.length === 0) { 
+                tb.innerHTML = '<tr><td colspan="2" class="p-8 text-center text-gray-500 font-bold">لا توجد بيانات</td></tr>'; 
+                return; 
+            }
+            
+            sortedTotals.forEach(([name, qty]) => { 
+                if (qty > 0) htmlStr += `<tr class="border-b hover:bg-gray-50"><td class="p-4 font-bold text-lg">${name}</td><td class="p-4 font-black text-blue-600 text-xl">${qty}</td></tr>`; 
+            });
+            tb.innerHTML = htmlStr;
         }
 
         function exportReportCSV() {
@@ -557,22 +593,30 @@
             renderList('branches', 'listBranches', b => b.name); renderList('categories', 'listCategories', c => c.name);
             const catSel = document.getElementById('newProductCategory'); catSel.innerHTML = '';
             Object.entries(globalData.categories).forEach(([id, c]) => { catSel.innerHTML += `<option value="${id}">${c.name}</option>`; });
-            const prodUl = document.getElementById('listProducts'); prodUl.innerHTML = '';
+            
+            const prodUl = document.getElementById('listProducts'); 
+            let prodHtml = '';
             Object.entries(globalData.products).forEach(([id, p]) => {
                 let catName = globalData.categories[p.category] ? globalData.categories[p.category].name : 'غير محدد';
-                prodUl.innerHTML += `<li class="flex flex-col md:flex-row justify-between items-center p-3 bg-white border rounded gap-2"><span><b>${p.name}</b> <span class="text-xs text-gray-500">(${catName})</span></span><div class="flex gap-3"><button onclick="editProduct('${id}', '${p.name}')" class="text-blue-600 font-bold hover:underline">✏️ تعديل</button><button onclick="secureDelete('settings/products/${id}')" class="text-red-600 font-bold hover:underline">🗑️ حذف</button></div></li>`;
+                prodHtml += `<li class="flex flex-col md:flex-row justify-between items-center p-3 bg-white border rounded gap-2"><span><b>${p.name}</b> <span class="text-xs text-gray-500">(${catName})</span></span><div class="flex gap-3"><button onclick="editProduct('${id}', '${p.name}')" class="text-blue-600 font-bold hover:underline">✏️ تعديل</button><button onclick="secureDelete('settings/products/${id}')" class="text-red-600 font-bold hover:underline">🗑️ حذف</button></div></li>`;
             });
-            const userUl = document.getElementById('listUsers'); userUl.innerHTML = '';
+            prodUl.innerHTML = prodHtml;
+            
+            const userUl = document.getElementById('listUsers'); 
+            let userHtml = '';
             Object.entries(globalData.users).forEach(([code, u]) => {
-                userUl.innerHTML += `<li class="flex flex-col md:flex-row justify-between items-center p-3 bg-white border rounded gap-2"><span><b>${u.name}</b> <span class="text-xs text-blue-500" dir="ltr">[${code}]</span></span><div class="flex gap-3"><button onclick="editUser('${code}', '${u.name}')" class="text-blue-600 font-bold hover:underline">✏️ تعديل</button><button onclick="secureDelete('users/${code}')" class="text-red-600 font-bold hover:underline">🗑️ حذف</button></div></li>`;
+                userHtml += `<li class="flex flex-col md:flex-row justify-between items-center p-3 bg-white border rounded gap-2"><span><b>${u.name}</b> <span class="text-xs text-blue-500" dir="ltr">[${code}]</span></span><div class="flex gap-3"><button onclick="editUser('${code}', '${u.name}')" class="text-blue-600 font-bold hover:underline">✏️ تعديل</button><button onclick="secureDelete('users/${code}')" class="text-red-600 font-bold hover:underline">🗑️ حذف</button></div></li>`;
             });
+            userUl.innerHTML = userHtml;
         }
 
         function renderList(key, elId, display) {
-            const ul = document.getElementById(elId); ul.innerHTML = '';
+            const ul = document.getElementById(elId); 
+            let htmlStr = '';
             Object.entries(globalData[key]).forEach(([id, item]) => {
-                ul.innerHTML += `<li class="flex flex-col md:flex-row justify-between items-center p-3 bg-white border rounded gap-2"><span>${display(item)}</span><div class="flex gap-3"><button onclick="editSetting('${key}', '${id}', '${item.name}')" class="text-blue-600 font-bold hover:underline">✏️ تعديل</button><button onclick="secureDelete('settings/${key}/${id}')" class="text-red-600 font-bold hover:underline">🗑️ حذف</button></div></li>`;
+                htmlStr += `<li class="flex flex-col md:flex-row justify-between items-center p-3 bg-white border rounded gap-2"><span>${display(item)}</span><div class="flex gap-3"><button onclick="editSetting('${key}', '${id}', '${item.name}')" class="text-blue-600 font-bold hover:underline">✏️ تعديل</button><button onclick="secureDelete('settings/${key}/${id}')" class="text-red-600 font-bold hover:underline">🗑️ حذف</button></div></li>`;
             });
+            ul.innerHTML = htmlStr;
         }
 
         async function addSetting(path, inputId) { const val = document.getElementById(inputId).value.trim(); if(!val) return; await postDB(`settings/${path}`, { name: val }); document.getElementById(inputId).value = ''; await initData(); renderSettings(); }
