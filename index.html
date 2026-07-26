@@ -321,12 +321,13 @@
                     
                     prods.forEach(p => {
                         const inputId = `input_${p.name.replace(/\s+/g, '_')}`;
+                        // تم تغيير step إلى 0.01 لدعم الفواصل والأرقام العشرية
                         htmlStr += `
                             <div class="p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-gray-50 transition">
                                 <span class="text-lg font-bold text-gray-700">${p.name}</span>
                                 <div class="flex items-center gap-3">
                                     <button type="button" onclick="changeQty('${inputId}', -1)" class="qty-btn bg-red-100 text-red-600 hover:bg-red-200">-</button>
-                                    <input type="number" id="${inputId}" data-name="${p.name}" value="0" min="0" 
+                                    <input type="number" id="${inputId}" data-name="${p.name}" value="0" min="0" step="0.01" 
                                            class="order-item-input w-24 text-center p-2 text-xl font-black border-2 rounded-xl focus:border-blue-500 outline-none">
                                     <button type="button" onclick="changeQty('${inputId}', 1)" class="qty-btn bg-green-100 text-green-600 hover:bg-green-200">+</button>
                                 </div>
@@ -338,17 +339,21 @@
             area.innerHTML = htmlStr;
         }
 
+        // تم تعديل الدالة لتستخدم parseFloat وتدعم الأرقام العشرية بدقة
         function changeQty(id, delta) {
             const input = document.getElementById(id);
-            let val = parseInt(input.value) || 0;
-            input.value = Math.max(0, val + delta);
+            let val = parseFloat(input.value) || 0;
+            let newVal = Math.max(0, val + delta);
+            // تقريب الرقم لتجنب مشاكل الجافاسكريبت في الكسور (مثل 0.30000004) وإزالة الأصفار الزائدة
+            input.value = Number(newVal.toFixed(2));
         }
 
         async function submitOrder(e) {
             e.preventDefault();
             const items = [];
             document.querySelectorAll('.order-item-input').forEach(input => {
-                let val = parseInt(input.value);
+                // استخدام parseFloat للسماح بحفظ الأرقام العشرية
+                let val = parseFloat(input.value);
                 if(val > 0) items.push({ name: input.getAttribute('data-name'), qty: val });
             });
             if(items.length === 0) return alert("الرجاء تحديد صنف واحد على الأقل.");
@@ -394,7 +399,7 @@
             document.getElementById(`tab${tab.charAt(0).toUpperCase() + tab.slice(1)}`).className = "px-4 py-2 font-bold bg-gray-800 text-white rounded-lg whitespace-nowrap";
             
             if(tab === 'orders') { 
-                currentOrdersLimit = 50; // إعادة التعيين عند فتح التبويب
+                currentOrdersLimit = 50; 
                 renderAdminOrders(); 
             } 
             else if(tab === 'reports') {
@@ -559,11 +564,17 @@
             if(branch !== 'all') filtered = filtered.filter(o => o.branch === branch);
             
             let totals = {};
-            filtered.forEach(o => { if(Array.isArray(o.items)) { o.items.forEach(i => { totals[i.name] = (totals[i.name] || 0) + parseInt(i.qty); }) } });
+            // استخدام parseFloat لضمان جمع الكسور والأعداد العشرية صح
+            filtered.forEach(o => { if(Array.isArray(o.items)) { o.items.forEach(i => { totals[i.name] = (totals[i.name] || 0) + parseFloat(i.qty); }) } });
             
             const tb = document.getElementById('reportsTableBody'); 
             let htmlStr = '';
-            let sortedTotals = Object.entries(totals).sort((a,b)=>b[1]-a[1]);
+            
+            // تنظيف النتائج من الكسور الطويلة وترتيبها
+            let sortedTotals = Object.entries(totals)
+                .map(([name, qty]) => [name, Number(qty.toFixed(2))])
+                .sort((a,b)=>b[1]-a[1]);
+                
             globalData.currentReportData = sortedTotals;
 
             if(sortedTotals.length === 0) { 
